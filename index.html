@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link
+      rel="icon"
+      type="image/svg+xml"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='11' fill='%235c0632' stroke='%23d8b56c' stroke-width='1.5'/%3E%3Cpath d='M19 14l-6-4V5.2c0-.7-.45-1.2-1-1.2s-1 .5-1 1.2V10l-6 4v1.5l6-2v4l-2 1.3V20l3-.9 3 .9v-1.2l-2-1.3v-4l6 2V14z' fill='%23f2d99d'/%3E%3C/svg%3E"
+    />
+    <title>The Aviation Jack-in-the-Box — Interactive 3D Experience</title>
+  </head>
+  <body>
+    <div id="ife-bezel">
+      <div id="ife-screen">
+        <!-- 3D WebGL Canvas Container -->
+        <div id="canvas-container" aria-label="Interactive 3D Aviation Jack-in-the-Box scene"></div>
+
+        <!-- Subtle IFE Glass Reflection & Vignette Overlay -->
+        <div class="ife-glass-overlay" aria-hidden="true"></div>
+
+        <!-- Top Aircraft IFE Status Bar -->
+        <header class="ife-topbar">
+          <div class="ife-topbar-left">
+            <span class="ife-crest" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none">
+                <path
+                  d="M21 14.5L13 9.5V4.2C13 3.26 12.55 2.5 12 2.5C11.45 2.5 11 3.26 11 4.2V9.5L3 14.5V16.4L11 13.9V18.8L8.5 20.5V21.8L12 20.7L15.5 21.8V20.5L13 18.8V13.9L21 16.4V14.5Z"
+                  fill="currentColor"
+                />
+              </svg>
+            </span>
+            <span class="ife-flight-code">QR 001</span>
+            <span class="ife-divider"></span>
+            <span id="ife-phase-label" class="ife-phase-label">READY TO WIND</span>
+          </div>
+
+          <div id="ife-header-title" class="ife-topbar-center">
+            <h1 class="ife-title">The Aviation Jack-in-the-Box</h1>
+          </div>
+
+          <div class="ife-topbar-right">
+            <span class="ife-telemetry">ALT 38,000 FT</span>
+            <button id="audio-toggle" class="ife-icon-btn" type="button" aria-label="Toggle Sound" title="Toggle Sound">
+              <span class="audio-bars" id="audio-bars">
+                <i></i><i></i><i></i><i></i>
+              </span>
+              <span id="audio-label">SOUND</span>
+            </button>
+          </div>
+        </header>
+
+        <!-- Dynamic 3D-Projected Crank Handle Callout -->
+        <div id="crank-callout" class="crank-callout" aria-hidden="true">
+          <div class="crank-pulse-ring"></div>
+          <span class="crank-callout-tag">DRAG TO WIND</span>
+        </div>
+
+        <!-- Bottom Winding Controls & Tension Meter -->
+        <div id="winding-hud" class="winding-hud">
+          <div class="tension-pill">
+            <svg class="tension-ring" viewBox="0 0 44 44" width="40" height="40">
+              <circle class="tension-ring-bg" cx="22" cy="22" r="18" />
+              <circle id="tension-ring-fill" class="tension-ring-fill" cx="22" cy="22" r="18" />
+            </svg>
+            <div class="tension-copy">
+              <div class="tension-heading">
+                <span id="tension-status-text">Wind the Mechanical Crank</span>
+                <span id="tension-percent" class="tension-percent">0%</span>
+              </div>
+              <p class="tension-subtext">Drag crank handle in circles &middot; or scroll / hold <kbd>Space</kbd></p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Subtle Finale HUD with Replay Button -->
+        <div id="finale-hud" class="finale-hud hidden">
+          <button id="replay-btn" class="replay-btn" type="button">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8">
+              <path d="M3 12a9 9 0 1 0 3-6.7L3 8" stroke-linecap="round" stroke-linejoin="round" />
+              <path d="M3 3v5h5" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+            <span>Replay</span>
+          </button>
+        </div>
+
+        <!-- Bottom IFE Ambient Micro-Bar -->
+        <footer class="ife-bottombar" aria-hidden="true">
+          <span class="ife-hint">Move pointer to explore 3D perspective</span>
+          <span class="ife-cabin-indicator">ORYX SKY THEATRE</span>
+        </footer>
+      </div>
+
+      <!-- Subtle IFE Monitor Bottom Chin Indicator Light -->
+      <div class="ife-bezel-chin" aria-hidden="true">
+        <span class="ife-power-dot"></span>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

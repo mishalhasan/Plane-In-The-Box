@@ -1,0 +1,490 @@
+:root {
+  --bg-obsidian: #050811;
+  --navy-deep: #091024;
+  --burgundy: #5c0632;
+  --burgundy-glow: #8f1450;
+  --gold: #d8b56c;
+  --gold-bright: #f2d99d;
+  --ivory: #f6f3ed;
+  --text-muted: rgba(246, 243, 237, 0.62);
+  --glass-bg: rgba(10, 15, 34, 0.64);
+  --glass-border: rgba(216, 181, 108, 0.28);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: radial-gradient(circle at 50% 45%, #121a35 0%, #05070e 100%);
+  color: var(--ivory);
+  font-family: 'Avenir Next', 'Optima', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+/* Modern Aircraft IFE Bezel Frame */
+#ife-bezel {
+  position: fixed;
+  inset: 0;
+  padding: 14px 16px 20px;
+  display: flex;
+  flex-direction: column;
+  background:
+    linear-gradient(160deg, #1b2235 0%, #0b0e18 42%, #070910 75%, #171c2b 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+#ife-screen {
+  position: relative;
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  border-radius: 18px;
+  overflow: hidden;
+  background: var(--navy-deep);
+  border: 1px solid rgba(216, 181, 108, 0.22);
+  box-shadow:
+    0 20px 60px rgba(0, 0, 0, 0.85),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+
+#canvas-container {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+#canvas-container canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+#canvas-container.crank-hover {
+  cursor: grab;
+}
+
+#canvas-container.crank-dragging {
+  cursor: grabbing;
+}
+
+/* Subtle IFE Anti-Glare Glass Sheen & Edge Vignette */
+.ife-glass-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 50% 50%, transparent 58%, rgba(4, 7, 18, 0.56) 100%),
+    linear-gradient(125deg, rgba(255, 255, 255, 0.035) 0%, transparent 32%, transparent 78%, rgba(216, 181, 108, 0.025) 100%);
+  z-index: 2;
+}
+
+/* Top Status Bar */
+.ife-topbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 54px;
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: linear-gradient(180deg, rgba(6, 10, 24, 0.78) 0%, rgba(6, 10, 24, 0) 100%);
+  pointer-events: none;
+  z-index: 5;
+}
+
+.ife-topbar-left,
+.ife-topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 220px;
+}
+
+.ife-topbar-right {
+  justify-content: flex-end;
+}
+
+.ife-crest {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(92, 6, 50, 0.9), rgba(45, 5, 26, 0.95));
+  border: 1px solid rgba(216, 181, 108, 0.5);
+  color: var(--gold-bright);
+  box-shadow: 0 2px 10px rgba(92, 6, 50, 0.5);
+}
+
+.ife-flight-code {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  color: var(--gold);
+}
+
+.ife-divider {
+  width: 1px;
+  height: 12px;
+  background: rgba(216, 181, 108, 0.28);
+}
+
+.ife-phase-label {
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  transition: color 0.35s ease;
+}
+
+.ife-topbar-center {
+  text-align: center;
+  transition: opacity 0.8s ease, transform 0.8s ease;
+}
+
+.ife-topbar-center.dimmed {
+  opacity: 0.28;
+}
+
+.ife-title {
+  font-family: 'Didot', 'Bodoni MT', 'Optima', 'Georgia', serif;
+  font-size: 16px;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ivory);
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.65);
+}
+
+.ife-telemetry {
+  font-size: 10.5px;
+  letter-spacing: 0.15em;
+  color: rgba(246, 243, 237, 0.48);
+}
+
+.ife-icon-btn {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  border: 1px solid rgba(216, 181, 108, 0.3);
+  background: rgba(11, 17, 38, 0.68);
+  backdrop-filter: blur(10px);
+  color: var(--ivory);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  cursor: pointer;
+  transition: border-color 0.25s ease, background 0.25s ease, transform 0.2s ease;
+}
+
+.ife-icon-btn:hover {
+  border-color: var(--gold);
+  background: rgba(92, 6, 50, 0.48);
+}
+
+.audio-bars {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 11px;
+}
+
+.audio-bars i {
+  display: block;
+  width: 2px;
+  background: var(--gold);
+  border-radius: 1px;
+  transition: height 0.2s ease, opacity 0.2s ease;
+}
+
+.audio-bars i:nth-child(1) { height: 5px; }
+.audio-bars i:nth-child(2) { height: 10px; }
+.audio-bars i:nth-child(3) { height: 7px; }
+.audio-bars i:nth-child(4) { height: 11px; }
+
+.audio-bars.muted i {
+  height: 3px !important;
+  opacity: 0.4;
+}
+
+/* 3D-Projected Crank Callout */
+.crank-callout {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  z-index: 4;
+  transition: opacity 0.35s ease;
+}
+
+.crank-callout.hidden {
+  opacity: 0;
+}
+
+.crank-pulse-ring {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(242, 217, 157, 0.85);
+  box-shadow: 0 0 18px rgba(216, 181, 108, 0.45);
+  transform: translate(-50%, -50%);
+  animation: crankPulse 2.1s infinite cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.crank-callout-tag {
+  position: absolute;
+  left: 32px;
+  top: 0;
+  transform: translateY(-50%);
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(92, 6, 50, 0.88), rgba(14, 21, 46, 0.9));
+  border: 1px solid rgba(216, 181, 108, 0.55);
+  color: var(--gold-bright);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  white-space: nowrap;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+}
+
+@keyframes crankPulse {
+  0% {
+    transform: translate(-50%, -50%) scale(0.84);
+    opacity: 0.95;
+  }
+  70% {
+    transform: translate(-50%, -50%) scale(1.28);
+    opacity: 0.18;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(0.84);
+    opacity: 0.95;
+  }
+}
+
+/* Winding Tension HUD */
+.winding-hud {
+  position: absolute;
+  bottom: 42px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  pointer-events: none;
+  transition: opacity 0.5s ease, transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.winding-hud.hidden {
+  opacity: 0;
+  transform: translateX(-50%) translateY(16px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.tension-pill {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 20px 10px 14px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(10, 16, 36, 0.78), rgba(42, 7, 26, 0.72));
+  border: 1px solid rgba(216, 181, 108, 0.34);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.55);
+}
+
+.tension-ring {
+  transform: rotate(-90deg);
+  flex-shrink: 0;
+}
+
+.tension-ring-bg {
+  fill: none;
+  stroke: rgba(216, 181, 108, 0.16);
+  stroke-width: 3;
+}
+
+.tension-ring-fill {
+  fill: none;
+  stroke: var(--gold-bright);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-dasharray: 113.1;
+  stroke-dashoffset: 113.1;
+  transition: stroke-dashoffset 0.08s linear, stroke 0.3s ease;
+}
+
+.tension-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tension-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--ivory);
+}
+
+.tension-percent {
+  font-variant-numeric: tabular-nums;
+  font-size: 11.5px;
+  color: var(--gold-bright);
+}
+
+.tension-subtext {
+  font-size: 11px;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+}
+
+.tension-subtext kbd {
+  display: inline-block;
+  padding: 1px 5px;
+  font-family: inherit;
+  font-size: 10px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(216, 181, 108, 0.32);
+  color: var(--gold-bright);
+}
+
+/* Finale Replay HUD */
+.finale-hud {
+  position: absolute;
+  bottom: 44px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 6;
+  transition: opacity 0.75s ease, transform 0.75s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.finale-hud.hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-50%) translateY(12px);
+  transition: opacity 0.12s ease, transform 0.12s ease;
+}
+
+.replay-btn {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 24px;
+  border-radius: 999px;
+  border: 1px solid rgba(216, 181, 108, 0.52);
+  background: linear-gradient(135deg, rgba(92, 6, 50, 0.82), rgba(12, 19, 44, 0.86));
+  backdrop-filter: blur(14px);
+  color: var(--ivory);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  cursor: pointer;
+  box-shadow:
+    0 10px 30px rgba(0, 0, 0, 0.55),
+    0 0 22px rgba(92, 6, 50, 0.4);
+  transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease, background 0.25s ease;
+}
+
+.replay-btn:hover {
+  transform: translateY(-2px);
+  border-color: var(--gold-bright);
+  background: linear-gradient(135deg, rgba(122, 12, 68, 0.92), rgba(18, 28, 62, 0.92));
+  box-shadow:
+    0 14px 36px rgba(0, 0, 0, 0.65),
+    0 0 28px rgba(216, 181, 108, 0.32);
+}
+
+.replay-btn:active {
+  transform: translateY(0);
+}
+
+.replay-btn svg {
+  color: var(--gold-bright);
+}
+
+/* Bottom Ambient IFE Micro-Bar */
+.ife-bottombar {
+  position: absolute;
+  bottom: 12px;
+  left: 24px;
+  right: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  pointer-events: none;
+  z-index: 4;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(246, 243, 237, 0.36);
+}
+
+.ife-bezel-chin {
+  height: 8px;
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ife-power-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--gold);
+  opacity: 0.55;
+  box-shadow: 0 0 8px var(--gold);
+}
+
+@media (max-width: 760px) {
+  #ife-bezel {
+    padding: 8px 8px 14px;
+  }
+  .ife-topbar-left,
+  .ife-topbar-right {
+    min-width: auto;
+  }
+  .ife-telemetry,
+  .ife-phase-label {
+    display: none;
+  }
+  .ife-title {
+    font-size: 12.5px;
+    letter-spacing: 0.1em;
+  }
+  .crank-callout-tag {
+    display: none;
+  }
+}
