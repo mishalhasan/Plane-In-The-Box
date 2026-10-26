@@ -48,9 +48,19 @@ class AviationJackInTheBoxApp {
 
   private isHoveringCrank = false;
   private isDraggingCrank = false;
+  private isOrbitingCamera = false;
   private lastPointerAngle = 0;
   private lastPointerClient = new THREE.Vector2();
   private isSpaceHeld = false;
+
+  // Bounded interactive 3D camera orbit offsets (active in IDLE_WINDING & SETTLED_END)
+  private orbitYaw = 0;
+  private orbitPitch = 0;
+  private orbitZoom = 0;
+  private orbitYawTarget = 0;
+  private orbitPitchTarget = 0;
+  private orbitZoomTarget = 0;
+  private lastGestureScale = 1;
 
   // Smooth camera rig state
   private readonly camPos = new THREE.Vector3(0.42, 0.12, 5.45);
@@ -60,6 +70,9 @@ class AviationJackInTheBoxApp {
 
   // Reusable vectors
   private readonly _projVec = new THREE.Vector3();
+  private readonly _knobWorld = new THREE.Vector3();
+  private readonly _crankNormal = new THREE.Vector3();
+  private readonly _crankToCam = new THREE.Vector3();
   private readonly _nozzleWorld = new THREE.Vector3();
   private readonly _cradleWorld = new THREE.Vector3();
 
@@ -160,11 +173,16 @@ class AviationJackInTheBoxApp {
     window.addEventListener('resize', this.onResize);
 
     const dom = this.renderer.domElement;
-    dom.addEventListener('pointermove', this.onPointerMove);
+    window.addEventListener('pointermove', this.onPointerMove);
     dom.addEventListener('pointerdown', this.onPointerDown);
     window.addEventListener('pointerup', this.onPointerUp);
     window.addEventListener('pointercancel', this.onPointerUp);
+    window.addEventListener('blur', this.onPointerUp);
     dom.addEventListener('wheel', this.onWheel, { passive: false });
+
+    // Safari macOS two-finger pinch gesture support
+    dom.addEventListener('gesturestart', this.onGestureStart as EventListener, { passive: false });
+    dom.addEventListener('gesturechange', this.onGestureChange as EventListener, { passive: false });
 
     window.addEventListener('keydown', this.onKeyDown);
     window.addEventListener('keyup', this.onKeyUp);
@@ -211,95 +229,243 @@ class AviationJackInTheBoxApp {
     );
   }
 
+  /**
+   * Returns dot product between the crank wall's outward normal and the camera view ray.
+   * Positive when the right-side crank face is turned toward the camera; negative when behind the box.
+   */
+  private getCrankCameraFacingDot(): number {
+    this._crankNormal.set(1, 0, 0).applyQuaternion(this.jackBox.root.quaternion).normalize();
+    this.jackBox.crankPivot.getWorldPosition(this._projVec);
+    return this._crankToCam.subVectors(this.camera.position, this._projVec).normalize().dot(this._crankNormal);
+  }
+
+  /**
+   * Accurately checks whether pointer (clientX, clientY) targets the mechanical crank
+   * from the current 3D camera perspective without grabbing through solid box walls.
+   */
+  private isPointerOverCrank(clientX: number, clientY: number): boolean {
+    if (this.phase !== 'IDLE_WINDING') return false;
+
+    const facingDot = this.getCrankCameraFacingDot();
+    if (facingDot < -0.15) return false;
+
+    this.updatePointerNDC(clientX, clientY);
+    this.raycaster.setFromCamera(this.pointerNDC, this.camera);
+    const hits = this.raycaster.intersectObjects(this.jackBox.crankInteractMeshes, false);
+    if (hits.length > 0) return true;
+
+    const rect = this.container.getBoundingClientRect();
+    this.jackBox.crankKnobAnchor.getWorldPosition(this._knobWorld);
+    this._knobWorld.project(this.camera);
+    const knobX = ((this._knobWorld.x + 1) * 0.5) * rect.width + rect.left;
+    const knobY = ((-this._knobWorld.y + 1) * 0.5) * rect.height + rect.top;
+    if (Math.hypot(clientX - knobX, clientY - knobY) < 52) return true;
+
+    const pivotPx = this.getCrankPivotScreenPos();
+    const armMidX = (knobX + pivotPx.x) * 0.5;
+    const armMidY = (knobY + pivotPx.y) * 0.5;
+    if (Math.hypot(clientX - armMidX, clientY - armMidY) < 42) return true;
+
+    if (facingDot > 0.05 && Math.hypot(clientX - pivotPx.x, clientY - pivotPx.y) < 44) {
+      return true;
+    }
+
+    return false;
+  }
+
+  private isExplorationPhase(): boolean {
+    return this.phase === 'IDLE_WINDING' || this.phase === 'SETTLED_END';
+  }
+
+  private clampOrbitTargets(): void {
+    if (this.phase === 'IDLE_WINDING') {
+      this.orbitYawTarget = THREE.MathUtils.clamp(this.orbitYawTarget, -1.35, 1.35);
+      this.orbitPitchTarget = THREE.MathUtils.clamp(this.orbitPitchTarget, -0.18, 0.62);
+      this.orbitZoomTarget = THREE.MathUtils.clamp(this.orbitZoomTarget, -1.35, 1.35);
+    } else if (this.phase === 'SETTLED_END') {
+      this.orbitYawTarget = THREE.MathUtils.clamp(this.orbitYawTarget, -0.68, 0.68);
+      this.orbitPitchTarget = THREE.MathUtils.clamp(this.orbitPitchTarget, -0.14, 0.42);
+      this.orbitZoomTarget = THREE.MathUtils.clamp(this.orbitZoomTarget, -6.5, 3.0);
+    }
+  }
+
+  private resetOrbitState(): void {
+    this.isOrbitingCamera = false;
+    this.orbitYaw = 0;
+    this.orbitPitch = 0;
+    this.orbitZoom = 0;
+    this.orbitYawTarget = 0;
+    this.orbitPitchTarget = 0;
+    this.orbitZoomTarget = 0;
+    this.container.classList.remove('orbit-dragging');
+  }
+
   private onPointerMove = (e: PointerEvent): void => {
     this.updatePointerNDC(e.clientX, e.clientY);
 
-    // Update subtle mouse camera parallax (hold steady while actively cranking!)
-    if (!this.isDraggingCrank) {
+    // Update subtle mouse camera parallax when not actively dragging crank or camera
+    if (!this.isDraggingCrank && !this.isOrbitingCamera) {
       this.parallaxTarget.set(
         THREE.MathUtils.clamp(this.pointerNDC.x, -1, 1),
         THREE.MathUtils.clamp(this.pointerNDC.y, -1, 1)
       );
     }
 
-    if (this.phase === 'IDLE_WINDING') {
-      if (this.isDraggingCrank) {
-        const pivotPx = this.getCrankPivotScreenPos();
-        const dx = e.clientX - pivotPx.x;
-        const dy = e.clientY - pivotPx.y;
-        const distFromPivot = Math.hypot(dx, dy);
+    if (this.isDraggingCrank && this.phase === 'IDLE_WINDING') {
+      const pivotPx = this.getCrankPivotScreenPos();
+      const dx = e.clientX - pivotPx.x;
+      const dy = e.clientY - pivotPx.y;
+      const distFromPivot = Math.hypot(dx, dy);
 
-        const moveDx = e.clientX - this.lastPointerClient.x;
-        const moveDy = e.clientY - this.lastPointerClient.y;
+      const moveDx = e.clientX - this.lastPointerClient.x;
+      const moveDy = e.clientY - this.lastPointerClient.y;
+      const facingDot = this.getCrankCameraFacingDot();
 
-        if (distFromPivot > 24) {
-          // Circular cranking around the 3D shaft pivot
-          const currentAngle = Math.atan2(dy, dx);
-          let delta = currentAngle - this.lastPointerAngle;
-          while (delta > Math.PI) delta -= Math.PI * 2;
-          while (delta < -Math.PI) delta += Math.PI * 2;
-          this.lastPointerAngle = currentAngle;
+      if (distFromPivot > 24) {
+        // Circular cranking around the 3D shaft pivot
+        const currentAngle = Math.atan2(dy, dx);
+        let delta = currentAngle - this.lastPointerAngle;
+        while (delta > Math.PI) delta -= Math.PI * 2;
+        while (delta < -Math.PI) delta += Math.PI * 2;
+        this.lastPointerAngle = currentAngle;
 
-          // Support both clockwise & counterclockwise circular winding smoothly
-          const advance = Math.abs(delta);
-          if (advance > 0.001 && advance < 0.85) {
-            this.advanceCrank(advance);
-          }
-        } else {
-          // Close to shaft center: fall back cleanly to linear drag motion
-          const linearAdvance = (Math.abs(moveDy) + Math.abs(moveDx) * 0.5) * 0.016;
-          this.advanceCrank(linearAdvance);
-          this.lastPointerAngle = Math.atan2(dy, dx);
+        // Support both clockwise & counterclockwise circular winding smoothly
+        const edgeAssist = facingDot < 0.22 ? Math.abs(moveDy) * 0.014 : 0;
+        const advance = Math.max(Math.abs(delta), edgeAssist);
+        if (advance > 0.001 && advance < 0.85) {
+          this.advanceCrank(advance);
         }
-
-        this.lastPointerClient.set(e.clientX, e.clientY);
       } else {
-        // Check hover over crank assembly
-        this.raycaster.setFromCamera(this.pointerNDC, this.camera);
-        const hits = this.raycaster.intersectObjects(this.jackBox.crankInteractMeshes, false);
-        this.isHoveringCrank = hits.length > 0;
-        this.container.classList.toggle('crank-hover', this.isHoveringCrank);
+        // Close to shaft center: fall back cleanly to linear drag motion
+        const linearAdvance = (Math.abs(moveDy) + Math.abs(moveDx) * 0.5) * 0.016;
+        this.advanceCrank(linearAdvance);
+        this.lastPointerAngle = Math.atan2(dy, dx);
       }
+
+      this.lastPointerClient.set(e.clientX, e.clientY);
+      return;
+    }
+
+    if (this.isOrbitingCamera && this.isExplorationPhase()) {
+      const moveDx = e.clientX - this.lastPointerClient.x;
+      const moveDy = e.clientY - this.lastPointerClient.y;
+      this.lastPointerClient.set(e.clientX, e.clientY);
+
+      const yawSensitivity = this.phase === 'IDLE_WINDING' ? 0.0046 : 0.0034;
+      const pitchSensitivity = this.phase === 'IDLE_WINDING' ? 0.0034 : 0.0026;
+
+      this.orbitYawTarget -= moveDx * yawSensitivity;
+      this.orbitPitchTarget += moveDy * pitchSensitivity;
+      this.clampOrbitTargets();
+      return;
+    }
+
+    if (this.phase === 'IDLE_WINDING') {
+      this.isHoveringCrank = this.isPointerOverCrank(e.clientX, e.clientY);
+      this.container.classList.toggle('crank-hover', this.isHoveringCrank);
+    } else if (this.isHoveringCrank) {
+      this.isHoveringCrank = false;
+      this.container.classList.remove('crank-hover');
     }
   };
 
   private onPointerDown = (e: PointerEvent): void => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+
     this.sound.unlock();
     this.updatePointerNDC(e.clientX, e.clientY);
+    this.lastPointerClient.set(e.clientX, e.clientY);
 
-    if (this.phase !== 'IDLE_WINDING') return;
+    if (!this.isExplorationPhase()) return;
 
-    this.raycaster.setFromCamera(this.pointerNDC, this.camera);
-    const hits = this.raycaster.intersectObjects(this.jackBox.crankInteractMeshes, false);
-
-    // Also allow grabbing if clicking near the projected crank handle on screen
-    const pivotPx = this.getCrankPivotScreenPos();
-    const nearCrankScreen = Math.hypot(e.clientX - pivotPx.x, e.clientY - pivotPx.y) < 155;
-
-    if (hits.length > 0 || nearCrankScreen) {
-      this.isDraggingCrank = true;
-      this.container.classList.add('crank-dragging');
-      this.container.classList.remove('crank-hover');
-      this.lastPointerAngle = Math.atan2(e.clientY - pivotPx.y, e.clientX - pivotPx.x);
-      this.lastPointerClient.set(e.clientX, e.clientY);
+    try {
+      this.renderer.domElement.setPointerCapture(e.pointerId);
+    } catch {
+      // Ignore synthetic events without active pointer capture registration
     }
+
+    // Priority 1: Dragging the crank in IDLE_WINDING always winds the box, never rotates the camera
+    if (this.phase === 'IDLE_WINDING' && this.isPointerOverCrank(e.clientX, e.clientY)) {
+      const pivotPx = this.getCrankPivotScreenPos();
+      this.isDraggingCrank = true;
+      this.isOrbitingCamera = false;
+      this.container.classList.add('crank-dragging');
+      this.container.classList.remove('crank-hover', 'orbit-dragging');
+      this.lastPointerAngle = Math.atan2(e.clientY - pivotPx.y, e.clientX - pivotPx.x);
+      return;
+    }
+
+    // Priority 2: Dragging anywhere else in IDLE_WINDING or SETTLED_END orbits the camera
+    this.isOrbitingCamera = true;
+    this.container.classList.add('orbit-dragging');
   };
 
-  private onPointerUp = (): void => {
+  private onPointerUp = (e?: Event): void => {
+    if (e && 'pointerId' in e && typeof e.pointerId === 'number') {
+      try {
+        if (this.renderer.domElement.hasPointerCapture(e.pointerId)) {
+          this.renderer.domElement.releasePointerCapture(e.pointerId);
+        }
+      } catch {
+        // Ignore synthetic release errors
+      }
+    }
+
     if (this.isDraggingCrank) {
       this.isDraggingCrank = false;
       this.container.classList.remove('crank-dragging');
     }
+    if (this.isOrbitingCamera) {
+      this.isOrbitingCamera = false;
+      this.container.classList.remove('orbit-dragging');
+    }
   };
 
   private onWheel = (e: WheelEvent): void => {
-    if (this.phase !== 'IDLE_WINDING') return;
+    if (!this.isExplorationPhase()) return;
     e.preventDefault();
     this.sound.unlock();
-    const delta = Math.min(0.45, (Math.abs(e.deltaY) + Math.abs(e.deltaX)) * 0.0042);
-    if (delta > 0.001) {
-      this.advanceCrank(delta);
+
+    // Pinch-to-zoom on trackpad (ctrlKey wheel)
+    if (e.ctrlKey) {
+      const zoomScale = this.phase === 'IDLE_WINDING' ? 0.012 : 0.032;
+      this.orbitZoomTarget += e.deltaY * zoomScale;
+      this.clampOrbitTargets();
+      return;
     }
+
+    // Scrolling directly over the crank winds the mechanism
+    if (this.phase === 'IDLE_WINDING' && this.isPointerOverCrank(e.clientX, e.clientY)) {
+      const delta = Math.min(0.45, (Math.abs(e.deltaY) + Math.abs(e.deltaX)) * 0.0042);
+      if (delta > 0.001) {
+        this.advanceCrank(delta);
+      }
+      return;
+    }
+
+    // Two-finger trackpad swipe / wheel elsewhere smoothly rotates the camera around the box
+    const yawStep = this.phase === 'IDLE_WINDING' ? 0.0032 : 0.0024;
+    const pitchStep = this.phase === 'IDLE_WINDING' ? 0.0024 : 0.0018;
+    this.orbitYawTarget += e.deltaX * yawStep;
+    this.orbitPitchTarget -= e.deltaY * pitchStep;
+    this.clampOrbitTargets();
+  };
+
+  private onGestureStart = (e: Event & { scale?: number }): void => {
+    if (!this.isExplorationPhase()) return;
+    e.preventDefault();
+    this.lastGestureScale = e.scale ?? 1;
+  };
+
+  private onGestureChange = (e: Event & { scale?: number }): void => {
+    if (!this.isExplorationPhase()) return;
+    e.preventDefault();
+    const currentScale = e.scale ?? 1;
+    const deltaScale = currentScale - this.lastGestureScale;
+    this.lastGestureScale = currentScale;
+    const zoomSpan = this.phase === 'IDLE_WINDING' ? 2.4 : 6.5;
+    this.orbitZoomTarget -= deltaScale * zoomSpan;
+    this.clampOrbitTargets();
   };
 
   private onKeyDown = (e: KeyboardEvent): void => {
@@ -378,7 +544,8 @@ class AviationJackInTheBoxApp {
       case 'ANTICIPATION_POP':
         this.isDraggingCrank = false;
         this.isSpaceHeld = false;
-        this.container.classList.remove('crank-dragging', 'crank-hover');
+        this.resetOrbitState();
+        this.container.classList.remove('crank-dragging', 'crank-hover', 'orbit-dragging');
         this.crankCalloutEl.classList.add('hidden');
         this.windingHudEl.classList.add('hidden');
         this.phaseLabelEl.textContent = 'CLEARED FOR TAKEOFF';
@@ -404,6 +571,7 @@ class AviationJackInTheBoxApp {
         break;
 
       case 'SETTLED_END':
+        this.resetOrbitState();
         this.phaseLabelEl.textContent = 'QATAR AIRWAYS';
         this.headerTitleEl.classList.remove('dimmed');
         this.airplane.root.visible = false;
@@ -419,6 +587,7 @@ class AviationJackInTheBoxApp {
     this.lastClickTooth = 0;
     this.poppedTriggered = false;
 
+    this.resetOrbitState();
     this.parallaxTarget.set(0, 0);
     this.parallaxSmoothed.set(0, 0);
     this.targetCamPos.set(0.42, 0.12, 5.45);
@@ -441,12 +610,22 @@ class AviationJackInTheBoxApp {
   }
 
   private updateCrankCalloutScreenPos(): void {
-    if (this.phase !== 'IDLE_WINDING' || this.windProgress > 0.06 || this.isDraggingCrank) return;
+    if (this.phase !== 'IDLE_WINDING' || this.windProgress > 0.06 || this.isDraggingCrank) {
+      this.crankCalloutEl.classList.add('hidden');
+      return;
+    }
     const rect = this.container.getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0) return;
 
     this.camera.updateMatrixWorld();
     this.jackBox.root.updateMatrixWorld(true);
+
+    if (this.getCrankCameraFacingDot() < -0.08) {
+      this.crankCalloutEl.classList.add('hidden');
+      return;
+    }
+    this.crankCalloutEl.classList.remove('hidden');
+
     this.jackBox.crankKnobAnchor.getWorldPosition(this._projVec);
     this._projVec.project(this.camera);
     const sx = ((this._projVec.x + 1) * 0.5) * rect.width;
@@ -479,8 +658,12 @@ class AviationJackInTheBoxApp {
       this.advanceCrank(safeDt * 6.2);
     }
 
-    // Smooth pointer parallax interpolation
+    // Smooth pointer parallax & spherical orbit interpolation
     this.parallaxSmoothed.lerp(this.parallaxTarget, Math.min(1, safeDt * 4.5));
+    const orbitLerp = Math.min(1, safeDt * 11.0);
+    this.orbitYaw += (this.orbitYawTarget - this.orbitYaw) * orbitLerp;
+    this.orbitPitch += (this.orbitPitchTarget - this.orbitPitch) * orbitLerp;
+    this.orbitZoom += (this.orbitZoomTarget - this.orbitZoom) * orbitLerp;
 
     // Update environment motes & pedestal
     this.studio.update(this.elapsed);
@@ -498,16 +681,31 @@ class AviationJackInTheBoxApp {
         0
       );
 
-      // Sculptural close-up camera framing the Jack-in-the-Box + right crank
+      // Bounded spherical orbit around the Jack-in-the-Box focus (0.12, -0.62, 0.0)
+      // At orbit = (0, 0, 0), reproduces the exact sculptural close-up (0.42, 0.12, 5.45)
+      const focusX = 0.12;
+      const focusY = -0.62;
+      const focusZ = 0.0;
+      const baseRadius = Math.hypot(0.30, 0.74, 5.45);
+      const baseYaw = Math.atan2(0.30, 5.45);
+      const basePitch = Math.asin(0.74 / baseRadius);
+
+      const radius = THREE.MathUtils.clamp(baseRadius + this.orbitZoom, 4.15, 6.85);
+      const yaw = baseYaw + this.orbitYaw;
+      const pitch = basePitch + this.orbitPitch;
+      const cosPitch = Math.cos(pitch);
+      const rightX = Math.cos(yaw);
+      const rightZ = -Math.sin(yaw);
+
       this.targetCamPos.set(
-        0.42 + this.parallaxSmoothed.x * 0.65,
-        0.12 + this.parallaxSmoothed.y * 0.36,
-        5.45
+        focusX + Math.sin(yaw) * cosPitch * radius + rightX * this.parallaxSmoothed.x * 0.55,
+        focusY + Math.sin(pitch) * radius + this.parallaxSmoothed.y * 0.34,
+        focusZ + Math.cos(yaw) * cosPitch * radius + rightZ * this.parallaxSmoothed.x * 0.55
       );
       this.targetCamLook.set(
-        0.12 + this.parallaxSmoothed.x * 0.14,
-        -0.62 + this.parallaxSmoothed.y * 0.10,
-        0.0
+        focusX + rightX * this.parallaxSmoothed.x * 0.12,
+        focusY + this.parallaxSmoothed.y * 0.09,
+        focusZ + rightZ * this.parallaxSmoothed.x * 0.12
       );
     } else if (this.phase === 'ANTICIPATION_POP') {
       const popMoment = 0.38;
@@ -668,21 +866,41 @@ class AviationJackInTheBoxApp {
       this.jackBox.update(safeDt, this.elapsed, this.crankAngle, 1.0, false, false, true, 0);
       this.smoke.updateTime(this.elapsed);
 
+      // Bounded spherical exploration around the finale hero stage (open box + "Qatar Airways" skywriting)
+      // At orbit = (0, 0, 0), reproduces the exact settled composition (0, 1.40, skyZ) -> (0, 1.50, -0.35)
       const skyZ = this.getResponsiveSkyCameraZ(13.95);
+      const pivotY = 0.35;
+      const yaw = this.orbitYaw;
+      const neutralRadius = Math.hypot(1.40 - pivotY, skyZ);
+      const baseRadius = neutralRadius + Math.abs(Math.sin(yaw)) * 3.1;
+      const basePitch = Math.asin((1.40 - pivotY) / neutralRadius);
+
+      const radius = THREE.MathUtils.clamp(baseRadius + this.orbitZoom, Math.max(7.2, baseRadius - 6.5), baseRadius + 3.0);
+      const pitch = basePitch + this.orbitPitch;
+      const cosPitch = Math.cos(pitch);
+      const rightX = Math.cos(yaw);
+      const rightZ = -Math.sin(yaw);
+
+      // Keep both the full skywriting span and open box comfortably framed at oblique angles & zoom
+      const zoomInBlend = THREE.MathUtils.clamp(-this.orbitZoom / 6.5, 0, 1);
+      const lookBaseX = Math.sin(yaw) * 0.85 * (1 - zoomInBlend * 0.7);
+      const lookBaseY = THREE.MathUtils.lerp(1.50, 0.25, zoomInBlend * 0.65);
+
       this.targetCamPos.set(
-        this.parallaxSmoothed.x * 0.95,
-        1.40 + this.parallaxSmoothed.y * 0.52,
-        skyZ
+        Math.sin(yaw) * cosPitch * radius + rightX * this.parallaxSmoothed.x * 0.85,
+        pivotY + Math.sin(pitch) * radius + this.parallaxSmoothed.y * 0.48,
+        Math.cos(yaw) * cosPitch * radius + rightZ * this.parallaxSmoothed.x * 0.85
       );
       this.targetCamLook.set(
-        this.parallaxSmoothed.x * 0.20,
-        1.50 + this.parallaxSmoothed.y * 0.15,
-        -0.35
+        lookBaseX + rightX * this.parallaxSmoothed.x * 0.18,
+        lookBaseY + this.parallaxSmoothed.y * 0.14,
+        -0.35 + rightZ * this.parallaxSmoothed.x * 0.18
       );
     }
 
-    // Smooth cinematic camera damping
-    const camLerp = Math.min(1, safeDt * 3.6);
+    // Smooth camera damping (snappier response while user is actively orbiting, silky 3.6 cinematic glide otherwise)
+    const camRate = this.isOrbitingCamera ? 10.5 : 3.6;
+    const camLerp = Math.min(1, safeDt * camRate);
     this.camPos.lerp(this.targetCamPos, camLerp);
     this.camLook.lerp(this.targetCamLook, camLerp);
     this.camera.position.copy(this.camPos);
@@ -717,7 +935,15 @@ class AviationJackInTheBoxApp {
         activeSmokePuffs: this.smoke.getActivePuffCount(),
         completedStrokes: this.smoke.getCompletedStrokeCount(),
         totalSkywritingStrokes: this.choreographer.totalSkywritingStrokes,
-        replayVisible: !this.finaleHudEl.classList.contains('hidden')
+        replayVisible: !this.finaleHudEl.classList.contains('hidden'),
+        orbitYaw: Number(this.orbitYaw.toFixed(4)),
+        orbitPitch: Number(this.orbitPitch.toFixed(4)),
+        orbitZoom: Number(this.orbitZoom.toFixed(4)),
+        cameraPosition: [
+          Number(this.camera.position.x.toFixed(2)),
+          Number(this.camera.position.y.toFixed(2)),
+          Number(this.camera.position.z.toFixed(2))
+        ]
       }),
       windBy: (deltaProgress: number) => {
         this.advanceCrank(deltaProgress * this.fullWindRadians);
