@@ -1,4 +1,9 @@
 import * as THREE from 'three';
+import {
+  AIRWAYS_WORDMARK_PATH,
+  ORYX_EMBLEM_PATH,
+  QATAR_WORDMARK_PATH
+} from './QatarLiveryPaths';
 
 export class Airplane {
   public readonly root = new THREE.Group();
@@ -29,23 +34,57 @@ export class Airplane {
     const pearlLiveryMat = new THREE.MeshPhysicalMaterial({
       map: this.createFuselageLiveryTexture(),
       roughness: 0.2,
-      metalness: 0.08,
-      clearcoat: 0.85,
+      metalness: 0.06,
+      clearcoat: 0.86,
       clearcoatRoughness: 0.12
     });
 
-    const wingPearlMat = new THREE.MeshPhysicalMaterial({
-      color: new THREE.Color('#f2efe9'),
+    const bellyPearlMat = new THREE.MeshPhysicalMaterial({
+      color: new THREE.Color('#dfe2e8'),
+      roughness: 0.22,
+      metalness: 0.08,
+      clearcoat: 0.82,
+      clearcoatRoughness: 0.14
+    });
+
+    const wingLightGreyMat = new THREE.MeshPhysicalMaterial({
+      color: new THREE.Color('#e3e6ec'),
       roughness: 0.24,
       metalness: 0.14,
-      clearcoat: 0.7
+      clearcoat: 0.72
     });
 
     const burgundyTailMat = new THREE.MeshPhysicalMaterial({
-      color: new THREE.Color('#660838'),
+      color: new THREE.Color('#680838'),
+      emissive: new THREE.Color('#220212'),
+      emissiveIntensity: 0.25,
       roughness: 0.22,
-      metalness: 0.15,
-      clearcoat: 0.82,
+      metalness: 0.1,
+      clearcoat: 0.85,
+      clearcoatRoughness: 0.13
+    });
+
+    const tailEmblemMat = new THREE.MeshPhysicalMaterial({
+      map: this.createTailOryxTexture(),
+      color: new THREE.Color('#ffffff'),
+      emissive: new THREE.Color('#ffffff'),
+      emissiveIntensity: 0.18,
+      transparent: true,
+      alphaTest: 0.02,
+      roughness: 0.2,
+      metalness: 0.05,
+      clearcoat: 0.85,
+      clearcoatRoughness: 0.12,
+      polygonOffset: true,
+      polygonOffsetFactor: -1,
+      polygonOffsetUnits: -1
+    });
+
+    const nacelleLiveryMat = new THREE.MeshPhysicalMaterial({
+      map: this.createNacelleLiveryTexture(),
+      roughness: 0.22,
+      metalness: 0.12,
+      clearcoat: 0.8,
       clearcoatRoughness: 0.14
     });
 
@@ -55,107 +94,135 @@ export class Airplane {
       roughness: 0.12
     });
 
-    const goldTrimMat = new THREE.MeshStandardMaterial({
-      color: new THREE.Color('#e8c77b'),
-      metalness: 0.9,
-      roughness: 0.18
-    });
-
     const darkCoreMat = new THREE.MeshStandardMaterial({
       color: new THREE.Color('#141824'),
       metalness: 0.5,
       roughness: 0.45
     });
 
-    this.buildFuselage(pearlLiveryMat);
-    this.buildWings(wingPearlMat, burgundyTailMat, chromeMat);
-    this.buildTailAssembly(burgundyTailMat, wingPearlMat, goldTrimMat);
-    this.buildTurbofanEngines(wingPearlMat, chromeMat, darkCoreMat, burgundyTailMat);
+    this.buildFuselage(pearlLiveryMat, bellyPearlMat);
+    this.buildWings(wingLightGreyMat, burgundyTailMat, chromeMat);
+    this.buildTailAssembly(burgundyTailMat, wingLightGreyMat, tailEmblemMat);
+    this.buildTurbofanEngines(nacelleLiveryMat, wingLightGreyMat, chromeMat, darkCoreMat, burgundyTailMat);
     this.buildLightsAndSmokeNozzle();
   }
 
   private createFuselageLiveryTexture(): THREE.CanvasTexture {
+    // Choose w:h = 1024:2048 (~0.50) to match cylinder circumference (2*PI*0.082 = 0.515) : length (1.00)
+    // so fuselage typography and windows map isotropically with zero stretching.
     const w = 1024;
-    const h = 512;
+    const h = 2048;
     const canvas = document.createElement('canvas');
     canvas.width = w;
     canvas.height = h;
     const ctx = canvas.getContext('2d')!;
 
-    // Note on LatheGeometry UV mapping:
-    // U (0..1) wraps radially around the fuselage circumference.
-    // V (0..1) runs along profile from tail (v=0) to nose (v=1).
-    // With LatheGeometry rotated +90deg on X so +Y becomes +Z (nose):
-    // Let's make symmetric left/right wrap around top & bottom cleanly!
+    // LatheGeometry rotated +90deg on X:
+    // u = 0 / 1 -> bottom belly (-Y), u = 0.25 -> port (+X), u = 0.50 -> top crown (+Y), u = 0.75 -> starboard (-X)
+    // py = 0 -> nose (+Z, v = 1), py = h -> tail (-Z, v = 0)
 
-    // Base pearl-ivory upper body
-    ctx.fillStyle = '#f7f5f0';
+    // Luminous off-white / light pearl-grey upper fuselage with subtle crown pearl shading
+    const crownGrad = ctx.createLinearGradient(0, 0, w, 0);
+    crownGrad.addColorStop(0.0, '#f4f5f8');
+    crownGrad.addColorStop(0.28, '#f8f8fa');
+    crownGrad.addColorStop(0.5, '#eceff4');
+    crownGrad.addColorStop(0.72, '#f8f8fa');
+    crownGrad.addColorStop(1.0, '#f4f5f8');
+    ctx.fillStyle = crownGrad;
     ctx.fillRect(0, 0, w, h);
 
-    // Subtle warm silver-grey underbelly band (around bottom seam of cylinder)
-    // In LatheGeometry (phiStart=0..2PI): x = r*sin(phi), z = r*cos(phi).
-    // After rotateX(+PI/2): local x = r*sin(phi), local y = -r*cos(phi), local z = profileY!
-    // Wait: at phi = 0 (u=0) and phi = 2PI (u=1), local y = -r (BOTTOM belly)!
-    // At phi = PI (u=0.5), local y = +r (TOP crown)!
-    // Knowing exact UV coordinates makes cockpit & cabin windows 100% pinpoint accurate!
+    // Qatar Airways light dove pearl-grey underbelly band (u = 0..0.188 and u = 0.812..1.0)
+    ctx.fillStyle = '#dde0e7';
+    ctx.fillRect(0, h * 0.10, w * 0.188, h * 0.82);
+    ctx.fillRect(w * 0.812, h * 0.10, w * 0.188, h * 0.82);
 
-    // Belly grey band near u = 0..0.18 and u = 0.82..1.0
-    ctx.fillStyle = '#d8d5cf';
-    ctx.fillRect(0, h * 0.12, w * 0.19, h * 0.78);
-    ctx.fillRect(w * 0.81, h * 0.12, w * 0.19, h * 0.78);
+    // Crisp signature burgundy cheatline separating pearl-grey belly from bright upper body
+    ctx.fillStyle = '#640736';
+    ctx.fillRect(w * 0.185, h * 0.13, w * 0.0085, h * 0.75);
+    ctx.fillRect(w * 0.8065, h * 0.13, w * 0.0085, h * 0.75);
 
-    // Crisp burgundy & gold cheatline separating belly from pearl upper cabin
-    ctx.fillStyle = '#680838';
-    ctx.fillRect(w * 0.185, h * 0.14, w * 0.012, h * 0.73);
-    ctx.fillRect(w * 0.803, h * 0.14, w * 0.012, h * 0.73);
+    // Subtle cool-silver accent pinstripe right above burgundy cheatline
+    ctx.fillStyle = '#b9bfca';
+    ctx.fillRect(w * 0.1955, h * 0.14, w * 0.004, h * 0.73);
+    ctx.fillRect(w * 0.8005, h * 0.14, w * 0.004, h * 0.73);
 
-    ctx.fillStyle = '#dfc078';
-    ctx.fillRect(w * 0.197, h * 0.15, w * 0.006, h * 0.71);
-    ctx.fillRect(w * 0.797, h * 0.15, w * 0.006, h * 0.71);
-
-    // Swept burgundy tail-belly accent near rear (v = 0.04..0.28 -> canvas y = h*(1 - v))
-    ctx.fillStyle = '#660838';
-    ctx.beginPath();
-    ctx.moveTo(w * 0.32, h * 0.96);
-    ctx.lineTo(w * 0.68, h * 0.96);
-    ctx.lineTo(w * 0.56, h * 0.74);
-    ctx.lineTo(w * 0.44, h * 0.74);
-    ctx.closePath();
-    ctx.fill();
-
-    // Sleek A350-style wraparound dark cockpit visor near nose (v = 0.86..0.92 -> canvas y = h * 0.08..0.14)
-    // Top crown is u = 0.50, so cockpit spans u = 0.34 .. 0.66 slightly above midline!
-    const visorY = h * 0.105;
+    // Sleek A350-style wraparound dark cockpit visor near nose (v = 0.865..0.920 -> py = h * 0.080..0.135)
+    const visorY = h * 0.084;
+    const visorH = h * 0.044;
     ctx.fillStyle = '#101829';
     ctx.beginPath();
-    ctx.roundRect(w * 0.34, visorY, w * 0.32, h * 0.042, 12);
+    ctx.roundRect(w * 0.345, visorY, w * 0.31, visorH, 22);
     ctx.fill();
 
     // Subtle sky highlight on cockpit glass
-    ctx.fillStyle = 'rgba(155, 195, 255, 0.35)';
+    ctx.fillStyle = 'rgba(165, 202, 255, 0.36)';
     ctx.beginPath();
-    ctx.roundRect(w * 0.36, visorY + 3, w * 0.12, h * 0.016, 6);
-    ctx.roundRect(w * 0.52, visorY + 3, w * 0.12, h * 0.016, 6);
+    ctx.roundRect(w * 0.365, visorY + 8, w * 0.118, visorH * 0.36, 10);
+    ctx.roundRect(w * 0.517, visorY + 8, w * 0.118, visorH * 0.36, 10);
     ctx.fill();
 
-    // Illuminated warm passenger cabin windows along port (u ~ 0.27) & starboard (u ~ 0.73)
-    const numWindows = 18;
+    // Illuminated warm passenger cabin windows along port (u = 0.238) & starboard (u = 0.762)
+    const numWindows = 20;
     for (let i = 0; i < numWindows; i++) {
-      const v = 0.25 + (i / (numWindows - 1)) * 0.53;
+      const v = 0.24 + (i / (numWindows - 1)) * 0.54;
       const cy = h * (1 - v);
 
-      for (const sideU of [0.265, 0.735]) {
+      for (const sideU of [0.238, 0.762]) {
         const cx = w * sideU;
         ctx.fillStyle = '#ffdf9e';
         ctx.beginPath();
-        ctx.ellipse(cx, cy, 4.2, 5.5, 0, 0, Math.PI * 2);
+        // Upright oval window: 6.0px along u (vertical on fuselage), 4.4px along v (longitudinal)
+        ctx.ellipse(cx, cy, 6.0, 4.4, 0, 0, Math.PI * 2);
         ctx.fill();
 
-        ctx.strokeStyle = 'rgba(90, 96, 110, 0.55)';
-        ctx.lineWidth = 1.2;
+        ctx.strokeStyle = 'rgba(88, 96, 112, 0.52)';
+        ctx.lineWidth = 1.4;
         ctx.stroke();
       }
     }
+
+    // Full "QATAR AIRWAYS" burgundy lettering along both sides of the fuselage
+    const qatarPath = new Path2D(QATAR_WORDMARK_PATH);
+    const airwaysPath = new Path2D(AIRWAYS_WORDMARK_PATH);
+    const airwaysScale = 42.5 / 14.41; // Match cap height of AIRWAYS to QATAR (42.5 units)
+    const totalMarkUnits = 445.7;      // Combined single-line width in wordmark units (with crisp word space)
+    const targetWorldSpan = 0.40;      // Spans z = -0.12 .. +0.28 along constant-radius cylindrical fuselage
+    const sLong = (targetWorldSpan * h) / totalMarkUnits;
+    const sCirc = sLong * ((w / (Math.PI * 2 * 0.082)) / h); // Exact 1:1 undistorted aspect ratio on cylinder
+
+    const drawSingleLineBrandTitle = (): void => {
+      ctx.fillStyle = '#640736';
+
+      // "QATAR" (cap top at y = 16.25 -> shifted to y = 0)
+      ctx.save();
+      ctx.translate(0, -16.25);
+      ctx.fill(qatarPath);
+      ctx.restore();
+
+      // "AIRWAYS" positioned inline with clear optical word space and matched cap height
+      ctx.save();
+      ctx.translate(228, 0);
+      ctx.scale(airwaysScale, airwaysScale);
+      ctx.translate(-48.2, -65.35);
+      ctx.fill(airwaysPath);
+      ctx.restore();
+    };
+
+    // Port side (+X): nose (+Z, py = h * 0.22) is on viewer's LEFT; tail (-Z, py = h * 0.62) is on viewer's RIGHT
+    ctx.save();
+    ctx.translate(w * 0.368, h * 0.22);
+    ctx.rotate(Math.PI / 2);
+    ctx.scale(sLong, sCirc);
+    drawSingleLineBrandTitle();
+    ctx.restore();
+
+    // Starboard side (-X): tail (-Z, py = h * 0.62) is on viewer's LEFT; nose (+Z, py = h * 0.22) is on viewer's RIGHT
+    ctx.save();
+    ctx.translate(w * 0.632, h * 0.62);
+    ctx.rotate(-Math.PI / 2);
+    ctx.scale(sLong, sCirc);
+    drawSingleLineBrandTitle();
+    ctx.restore();
 
     const tex = new THREE.CanvasTexture(canvas);
     tex.colorSpace = THREE.SRGBColorSpace;
@@ -164,7 +231,81 @@ export class Airplane {
     return tex;
   }
 
-  private buildFuselage(mat: THREE.Material): void {
+  /**
+   * Renders the official white Arabian Oryx emblem into UV space where u = 0 is the fin leading edge
+   * (forward toward the nose) and u = 1 is the fin trailing edge, so both Port and Starboard fins
+   * display the Oryx facing forward toward the aircraft's nose with swept-back horns.
+   */
+  private createTailOryxTexture(): THREE.CanvasTexture {
+    const size = 1024;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d')!;
+
+    ctx.clearRect(0, 0, size, size);
+
+    // Clip strictly inside the vertical stabilizer trapezoid in (u, 1 - v) space
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(0.02 * size, 0.985 * size);
+    ctx.lineTo(0.688 * size, 0.02 * size);
+    ctx.lineTo(0.985 * size, 0.038 * size);
+    ctx.lineTo(0.910 * size, 0.985 * size);
+    ctx.closePath();
+    ctx.clip();
+
+    const oryxPath = new Path2D(ORYX_EMBLEM_PATH);
+    // Preserve exact 1:1 world-space proportions across the 0.26 (chord) x 0.25 (height) fin box
+    const worldScale = (2.56 / 364) * 0.26;
+    const sx = (worldScale / 0.26) * size;
+    const sy = (worldScale / 0.25) * size;
+
+    ctx.translate((-444 / 364) * size, (86 / 350) * size);
+    ctx.scale(sx, sy);
+    ctx.fillStyle = '#ffffff';
+    ctx.fill(oryxPath);
+    ctx.restore();
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = 8;
+    tex.needsUpdate = true;
+    return tex;
+  }
+
+  /**
+   * Predominantly light pearl-grey engine nacelle texture with subtle Qatar Airways burgundy forward collar.
+   */
+  private createNacelleLiveryTexture(): THREE.CanvasTexture {
+    const w = 256;
+    const h = 256;
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d')!;
+
+    // Clean light pearl-grey cowling base
+    ctx.fillStyle = '#e6e9ef';
+    ctx.fillRect(0, 0, w, h);
+
+    // Subtle Qatar Airways burgundy forward collar behind chrome intake lip
+    // (nacelleProfile exterior segment 2..3 maps z = +0.02..+0.075 to py = 0.60*h..0.40*h)
+    ctx.fillStyle = '#640736';
+    ctx.fillRect(0, h * 0.34, w, h * 0.14);
+
+    // Hairline pearl-white accent ring separating burgundy collar from light-grey cowling
+    ctx.fillStyle = '#f8f9fb';
+    ctx.fillRect(0, h * 0.48, w, h * 0.024);
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = 4;
+    tex.needsUpdate = true;
+    return tex;
+  }
+
+  private buildFuselage(mat: THREE.Material, bellyMat: THREE.Material): void {
     // Profile from tailcone (y = -0.50) to nose radome (y = +0.50)
     const profile: THREE.Vector2[] = [];
     const steps = 40;
@@ -211,7 +352,7 @@ export class Airplane {
     // Aerodynamic wing-root belly fairing
     const fairing = new THREE.Mesh(
       new THREE.SphereGeometry(0.086, 20, 16),
-      mat
+      bellyMat
     );
     fairing.scale.set(1.12, 0.55, 2.25);
     fairing.position.set(0, -0.042, 0.02);
@@ -306,8 +447,8 @@ export class Airplane {
 
   private buildTailAssembly(
     burgundyMat: THREE.Material,
-    pearlMat: THREE.Material,
-    goldMat: THREE.Material
+    wingGreyMat: THREE.Material,
+    tailEmblemMat: THREE.Material
   ): void {
     // Tall swept burgundy vertical stabilizer
     const finShape = new THREE.Shape();
@@ -332,15 +473,38 @@ export class Airplane {
     verticalFin.castShadow = true;
     this.modelGroup.add(verticalFin);
 
-    // Decorative swept champagne-gold tail stripes on both sides of vertical fin
-    for (const sx of [-0.011, 0.011]) {
-      const stripe1 = new THREE.Mesh(new THREE.BoxGeometry(0.003, 0.016, 0.13), goldMat);
-      stripe1.position.set(sx, 0.19, -0.37);
-      stripe1.rotation.x = -0.52;
-      const stripe2 = new THREE.Mesh(new THREE.BoxGeometry(0.003, 0.010, 0.10), goldMat);
-      stripe2.position.set(sx, 0.16, -0.385);
-      stripe2.rotation.x = -0.52;
-      this.modelGroup.add(stripe1, stripe2);
+    // Official white Arabian Oryx emblem mounted flush on both Port (+X) & Starboard (-X) tail faces
+    const finCorners = [
+      { y: 0.059, z: -0.225 }, // P0: root leading
+      { y: 0.300, z: -0.402 }, // P1: tip leading
+      { y: 0.296, z: -0.476 }, // P2: tip trailing
+      { y: 0.059, z: -0.456 }  // P3: root trailing
+    ];
+    for (const side of [1, -1]) {
+      const xFace = 0.0112 * side;
+      const emblemGeo = new THREE.BufferGeometry();
+      const positions = new Float32Array([
+        xFace, finCorners[0].y, finCorners[0].z,
+        xFace, finCorners[1].y, finCorners[1].z,
+        xFace, finCorners[2].y, finCorners[2].z,
+        xFace, finCorners[3].y, finCorners[3].z
+      ]);
+      const normals = new Float32Array([
+        side, 0, 0,
+        side, 0, 0,
+        side, 0, 0,
+        side, 0, 0
+      ]);
+      const uvs = new Float32Array(
+        finCorners.flatMap((c) => [(-0.22 - c.z) / 0.26, (c.y - 0.055) / 0.25])
+      );
+      emblemGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      emblemGeo.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
+      emblemGeo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+      emblemGeo.setIndex(side > 0 ? [0, 3, 2, 0, 2, 1] : [0, 2, 3, 0, 1, 2]);
+
+      const emblemMesh = new THREE.Mesh(emblemGeo, tailEmblemMat);
+      this.modelGroup.add(emblemMesh);
     }
 
     // Swept Horizontal Stabilizers (Port & Starboard)
@@ -361,7 +525,7 @@ export class Airplane {
       });
       hGeo.rotateX(-Math.PI / 2);
 
-      const hStab = new THREE.Mesh(hGeo, pearlMat);
+      const hStab = new THREE.Mesh(hGeo, wingGreyMat);
       hStab.scale.x = side;
       hStab.position.set(0, 0.024, -0.39);
       hStab.rotation.z = 0.13 * side;
@@ -372,6 +536,7 @@ export class Airplane {
 
   private buildTurbofanEngines(
     nacelleMat: THREE.Material,
+    pylonMat: THREE.Material,
     chromeMat: THREE.Material,
     darkCoreMat: THREE.Material,
     burgundyMat: THREE.Material
@@ -395,23 +560,23 @@ export class Airplane {
       // Swept engine pylon connecting nacelle to wing underside
       const pylon = new THREE.Mesh(
         new THREE.BoxGeometry(0.014, 0.045, 0.10),
-        nacelleMat
+        pylonMat
       );
       pylon.position.set(0, 0.034, -0.015);
       pylon.rotation.x = 0.22;
       engineGroup.add(pylon);
 
-      // Main pearl nacelle cowling
+      // Light pearl-grey nacelle cowling with Qatar Airways burgundy accents
       const cowling = new THREE.Mesh(nacelleGeo, nacelleMat);
       cowling.castShadow = true;
       engineGroup.add(cowling);
 
-      // Burgundy accent ring around nacelle
+      // Subtle 3D burgundy trim ring along the forward cowling collar
       const accentBand = new THREE.Mesh(
-        new THREE.TorusGeometry(0.0455, 0.003, 8, 24),
+        new THREE.TorusGeometry(0.0442, 0.002, 8, 28),
         burgundyMat
       );
-      accentBand.position.z = 0.02;
+      accentBand.position.z = 0.052;
       engineGroup.add(accentBand);
 
       // Polished chrome intake lip ring
