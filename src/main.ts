@@ -11,7 +11,6 @@ import { JackInTheBox } from './models/JackInTheBox';
 import { Airplane } from './models/Airplane';
 import { FlightChoreographer } from './flight/SkywritingPaths';
 import { OryxFinaleChoreographer } from './flight/OryxFinaleChoreographer';
-import { OryxEmblemReveal } from './flight/OryxEmblemReveal';
 import { SmokeTrailSystem } from './flight/SmokeTrailSystem';
 import { Choreographer, ExperiencePhase, FinaleVariant } from './types';
 
@@ -30,7 +29,6 @@ class AviationJackInTheBoxApp {
   private readonly classicChoreographer = new FlightChoreographer();
   private readonly oryxChoreographer = new OryxFinaleChoreographer();
   private readonly smoke: SmokeTrailSystem;
-  private readonly oryxReveal: OryxEmblemReveal;
 
   private finaleVariant: FinaleVariant;
 
@@ -39,6 +37,11 @@ class AviationJackInTheBoxApp {
   private phaseTime = 0;
   private elapsed = 0;
   private poppedTriggered = false;
+  private currentEmittingSmoke = false;
+  private currentPersistentSmoke = false;
+  private currentStrokeId = 0;
+  private currentSegmentLabel = 'Idle';
+  private skywritingProgress = 0;
 
   // Winding state
   private readonly fullWindRadians = Math.PI * 2 * 3.2; // 3.2 full crank turns
@@ -165,7 +168,6 @@ class AviationJackInTheBoxApp {
     this.scene.add(this.airplane.root);
 
     this.smoke = new SmokeTrailSystem(this.scene);
-    this.oryxReveal = new OryxEmblemReveal(this.scene);
 
     const urlVariant = new URLSearchParams(window.location.search).get('variant');
     this.finaleVariant = urlVariant === 'classic' ? 'classic' : 'oryx';
@@ -544,7 +546,7 @@ class AviationJackInTheBoxApp {
   }
 
   private applyVariantConfig(): void {
-    this.smoke.setPersistentRadiusScale(this.finaleVariant === 'oryx' ? 0.58 : 1.0);
+    this.smoke.setPersistentRadiusScale(this.finaleVariant === 'oryx' ? 0.72 : 1.0);
   }
 
   public setVariant(variant: FinaleVariant): void {
@@ -612,6 +614,11 @@ class AviationJackInTheBoxApp {
     this.windProgress = 0;
     this.lastClickTooth = 0;
     this.poppedTriggered = false;
+    this.currentEmittingSmoke = false;
+    this.currentPersistentSmoke = false;
+    this.currentStrokeId = 0;
+    this.currentSegmentLabel = 'Idle';
+    this.skywritingProgress = 0;
 
     this.resetOrbitState();
     this.parallaxTarget.set(0, 0);
@@ -625,7 +632,6 @@ class AviationJackInTheBoxApp {
 
     this.jackBox.reset();
     this.smoke.reset();
-    this.oryxReveal.reset();
     this.applyVariantConfig();
     this.sound.resetMelody();
     this.sound.updateFlightAudio(false, 0, 15, false);
@@ -786,6 +792,12 @@ class AviationJackInTheBoxApp {
         this.phaseTime,
         safeDt
       );
+      this.currentEmittingSmoke = sample.emitSmoke;
+      this.currentPersistentSmoke = sample.persistentSmoke;
+      this.currentStrokeId = sample.strokeId;
+      this.currentSegmentLabel = sample.label;
+      this.skywritingProgress = 0;
+
       this.airplane.setFlightPose(sample.position, sample.tangent, sample.rollAngle);
       this.airplane.updateEffects(safeDt, this.elapsed, sample.emitSmoke, 1.0);
 
@@ -802,19 +814,19 @@ class AviationJackInTheBoxApp {
       this.sound.updateFlightAudio(true, sample.speed, distCam, sample.emitSmoke);
 
       if (this.finaleVariant === 'oryx') {
-        const closeZ = this.getResponsiveOryxCameraZ(11.15);
+        const closeZ = this.getResponsiveOryxCameraZ(12.25);
         const blend = THREE.MathUtils.smoothstep(sample.normalizedProgress, 0.0, 0.94);
         const baseZ = THREE.MathUtils.lerp(7.6, closeZ, blend);
 
         this.targetCamPos.set(
-          sample.position.x * 0.24 * (1 - blend * 0.25) + this.parallaxSmoothed.x * 0.65,
-          THREE.MathUtils.lerp(0.85, 2.85, blend) + this.parallaxSmoothed.y * 0.40,
+          sample.position.x * 0.22 * (1 - blend * 0.25) + this.parallaxSmoothed.x * 0.65,
+          THREE.MathUtils.lerp(0.85, 2.75, blend) + this.parallaxSmoothed.y * 0.40,
           baseZ
         );
         this.targetCamLook.set(
-          sample.position.x * 0.20 * (1 - blend * 0.25),
-          THREE.MathUtils.lerp(0.55, 3.85, blend),
-          THREE.MathUtils.lerp(0.0, -0.58, blend)
+          sample.position.x * 0.18 * (1 - blend * 0.25),
+          THREE.MathUtils.lerp(0.55, 3.65, blend),
+          THREE.MathUtils.lerp(0.0, -0.55, blend)
         );
       } else {
         // Camera pulls smoothly back into panoramic sky view while subtly tracking the playful swoop
@@ -846,10 +858,16 @@ class AviationJackInTheBoxApp {
         this.phaseTime,
         safeDt
       );
+      this.currentEmittingSmoke = sample.emitSmoke;
+      this.currentPersistentSmoke = sample.persistentSmoke;
+      this.currentStrokeId = sample.strokeId;
+      this.currentSegmentLabel = sample.label;
+      this.skywritingProgress = sample.normalizedProgress;
+
       this.airplane.setFlightPose(sample.position, sample.tangent, sample.rollAngle);
       this.airplane.updateEffects(safeDt, this.elapsed, sample.emitSmoke, 1.0);
 
-      // Emit exact spline-aligned sub-steps across [prevPhaseTime, clampedEnd] so stroke caps never clip
+      // Emit exact spline-aligned sub-steps across [prevPhaseTime, clampedEnd] strictly behind aircraft nozzle
       const clampedEnd = Math.min(this.phaseTime, choreo.skywritingDuration);
       choreo.emitWindowStrokes(
         choreo.skywritingSegments,
@@ -861,54 +879,30 @@ class AviationJackInTheBoxApp {
       );
 
       const distCam = this.camera.position.distanceTo(sample.position);
+      this.sound.updateFlightAudio(true, sample.speed, distCam, sample.emitSmoke);
 
       if (this.finaleVariant === 'oryx') {
-        const oc = this.oryxChoreographer;
-        const emblemProg = THREE.MathUtils.clamp(
-          (this.phaseTime - oc.emblemRevealStart) / Math.max(0.1, oc.emblemRevealEnd - oc.emblemRevealStart),
-          0,
-          1
-        );
-        const wordmarkProg = THREE.MathUtils.clamp(
-          (this.phaseTime - oc.wordmarkStart) / Math.max(0.1, oc.wordmarkEnd - oc.wordmarkStart),
-          0,
-          1
-        );
-        this.oryxReveal.update(this.elapsed, emblemProg, wordmarkProg);
+        // Track the aircraft drawing each stroke up close, then pull back smoothly to frame completed Oryx + box
+        const pullT = THREE.MathUtils.smoothstep(sample.normalizedProgress, 0.72, 1.0);
+        const closeZ = this.getResponsiveOryxCameraZ(12.25);
+        const heroZ = this.getResponsiveOryxCameraZ(14.65);
 
-        // Blend aircraft's hand-drawn strokes harmoniously with the condensing volumetric cloud Oryx
-        this.smoke.setGlobalFade(1.0 - emblemProg * 0.24);
-
-        const activeCondensation = sample.emitSmoke || (emblemProg > 0.02 && emblemProg < 0.96);
-        this.sound.updateFlightAudio(true, sample.speed, distCam, activeCondensation);
-
-        if (this.phaseTime >= oc.tracingEndTime && this.phaseLabelEl.textContent !== 'ORYX SKY REVEAL') {
-          this.phaseLabelEl.textContent = 'ORYX SKY REVEAL';
-        }
-
-        // Intimate skywriting tracking -> cinematic pullback revealing completed Oryx + wordmark + open box
-        const pullT = THREE.MathUtils.smoothstep(this.phaseTime, oc.pullbackStart, oc.pullbackEnd);
-        const closeZ = this.getResponsiveOryxCameraZ(11.15);
-        const heroZ = this.getResponsiveOryxCameraZ(14.85);
-
-        const tracePosX = sample.position.x * 0.18;
-        const tracePosY = 2.95 + (sample.position.y - 4.5) * 0.14;
-        const traceLookX = sample.position.x * 0.14;
-        const traceLookY = 4.05 + (sample.position.y - 4.5) * 0.16;
+        const tracePosX = sample.position.x * 0.16;
+        const tracePosY = 2.75 + (sample.position.y - 4.4) * 0.14;
+        const traceLookX = sample.position.x * 0.12;
+        const traceLookY = 3.75 + (sample.position.y - 4.4) * 0.16;
 
         this.targetCamPos.set(
           THREE.MathUtils.lerp(tracePosX, 0.0, pullT) + this.parallaxSmoothed.x * 0.80,
-          THREE.MathUtils.lerp(tracePosY, 2.28, pullT) + this.parallaxSmoothed.y * 0.48,
+          THREE.MathUtils.lerp(tracePosY, 2.22, pullT) + this.parallaxSmoothed.y * 0.48,
           THREE.MathUtils.lerp(closeZ, heroZ, pullT)
         );
         this.targetCamLook.set(
           THREE.MathUtils.lerp(traceLookX, 0.0, pullT) + this.parallaxSmoothed.x * 0.14,
-          THREE.MathUtils.lerp(traceLookY, 2.58, pullT) + this.parallaxSmoothed.y * 0.12,
-          -0.58
+          THREE.MathUtils.lerp(traceLookY, 2.52, pullT) + this.parallaxSmoothed.y * 0.12,
+          -0.55
         );
       } else {
-        this.sound.updateFlightAudio(true, sample.speed, distCam, sample.emitSmoke);
-
         // Majestic wide sky framing with gentle horizontal breathing following the skywriting progress
         const skyZ = this.getResponsiveSkyCameraZ(13.85);
         this.targetCamPos.set(
@@ -935,6 +929,12 @@ class AviationJackInTheBoxApp {
         this.phaseTime,
         safeDt
       );
+      this.currentEmittingSmoke = sample.emitSmoke;
+      this.currentPersistentSmoke = sample.persistentSmoke;
+      this.currentStrokeId = sample.strokeId;
+      this.currentSegmentLabel = sample.label;
+      this.skywritingProgress = 1;
+
       this.airplane.setFlightPose(sample.position, sample.tangent, sample.rollAngle);
       this.airplane.updateEffects(safeDt, this.elapsed, sample.emitSmoke, 1.0);
 
@@ -948,21 +948,19 @@ class AviationJackInTheBoxApp {
       );
 
       const distCam = this.camera.position.distanceTo(sample.position);
-      this.sound.updateFlightAudio(true, sample.speed, distCam, false);
+      this.sound.updateFlightAudio(true, sample.speed, distCam, sample.emitSmoke);
 
       if (this.finaleVariant === 'oryx') {
-        this.oryxReveal.update(this.elapsed, 1.0, 1.0);
-
-        const heroZ = this.getResponsiveOryxCameraZ(14.85);
+        const heroZ = this.getResponsiveOryxCameraZ(14.65);
         this.targetCamPos.set(
           this.parallaxSmoothed.x * 0.85,
-          2.28 + this.parallaxSmoothed.y * 0.48,
+          2.22 + this.parallaxSmoothed.y * 0.48,
           heroZ
         );
         this.targetCamLook.set(
           this.parallaxSmoothed.x * 0.16,
-          2.58 + this.parallaxSmoothed.y * 0.13,
-          -0.58
+          2.52 + this.parallaxSmoothed.y * 0.13,
+          -0.55
         );
       } else {
         // Settle smoothly onto the iconic symmetrical hero composition framing "Qatar Airways" + Jack-in-the-Box
@@ -983,18 +981,22 @@ class AviationJackInTheBoxApp {
         this.enterPhase('SETTLED_END');
       }
     } else if (this.phase === 'SETTLED_END') {
+      this.currentEmittingSmoke = false;
+      this.currentPersistentSmoke = false;
+      this.currentStrokeId = 0;
+      this.currentSegmentLabel = 'Settled';
+      this.skywritingProgress = 1;
+
       this.jackBox.update(safeDt, this.elapsed, this.crankAngle, 1.0, false, false, true, 0);
       this.smoke.updateTime(this.elapsed);
 
       if (this.finaleVariant === 'oryx') {
-        this.oryxReveal.update(this.elapsed, 1.0, 1.0);
-
-        const heroZ = this.getResponsiveOryxCameraZ(14.85);
-        const pivotY = 1.22;
+        const heroZ = this.getResponsiveOryxCameraZ(14.65);
+        const pivotY = 1.18;
         const yaw = this.orbitYaw;
-        const neutralRadius = Math.hypot(2.28 - pivotY, heroZ);
+        const neutralRadius = Math.hypot(2.22 - pivotY, heroZ);
         const baseRadius = neutralRadius + Math.abs(Math.sin(yaw)) * 2.2;
-        const basePitch = Math.asin((2.28 - pivotY) / neutralRadius);
+        const basePitch = Math.asin((2.22 - pivotY) / neutralRadius);
 
         const radius = THREE.MathUtils.clamp(baseRadius + this.orbitZoom, Math.max(7.6, baseRadius - 6.5), baseRadius + 3.0);
         const pitch = basePitch + this.orbitPitch;
@@ -1004,7 +1006,7 @@ class AviationJackInTheBoxApp {
 
         const zoomInBlend = THREE.MathUtils.clamp(-this.orbitZoom / 6.5, 0, 1);
         const lookBaseX = Math.sin(yaw) * 0.55 * (1 - zoomInBlend * 0.65);
-        const lookBaseY = THREE.MathUtils.lerp(2.58, 1.02, zoomInBlend * 0.60);
+        const lookBaseY = THREE.MathUtils.lerp(2.52, 0.98, zoomInBlend * 0.60);
 
         this.targetCamPos.set(
           Math.sin(yaw) * cosPitch * radius + rightX * this.parallaxSmoothed.x * 0.85,
@@ -1014,7 +1016,7 @@ class AviationJackInTheBoxApp {
         this.targetCamLook.set(
           lookBaseX + rightX * this.parallaxSmoothed.x * 0.16,
           lookBaseY + this.parallaxSmoothed.y * 0.13,
-          -0.58 + rightZ * this.parallaxSmoothed.x * 0.16
+          -0.55 + rightZ * this.parallaxSmoothed.x * 0.16
         );
       } else {
         // Bounded spherical exploration around the finale hero stage (open box + "Qatar Airways" skywriting)
@@ -1088,8 +1090,11 @@ class AviationJackInTheBoxApp {
         activeSmokePuffs: this.smoke.getActivePuffCount(),
         completedStrokes: this.smoke.getCompletedStrokeCount(),
         totalSkywritingStrokes: this.activeChoreographer.totalSkywritingStrokes,
-        emblemRevealProgress: Number(this.oryxReveal.getEmblemProgress().toFixed(4)),
-        wordmarkRevealProgress: Number(this.oryxReveal.getWordmarkProgress().toFixed(4)),
+        emittingSmoke: this.currentEmittingSmoke,
+        persistentSmoke: this.currentPersistentSmoke,
+        currentStrokeId: this.currentStrokeId,
+        currentSegmentLabel: this.currentSegmentLabel,
+        skywritingProgress: Number(this.skywritingProgress.toFixed(4)),
         replayVisible: !this.finaleHudEl.classList.contains('hidden'),
         orbitYaw: Number(this.orbitYaw.toFixed(4)),
         orbitPitch: Number(this.orbitPitch.toFixed(4)),

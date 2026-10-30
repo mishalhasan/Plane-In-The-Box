@@ -69,8 +69,11 @@ export interface AppDebugAPI {
     activeSmokePuffs: number;
     completedStrokes: number;
     totalSkywritingStrokes: number;
-    emblemRevealProgress: number;
-    wordmarkRevealProgress: number;
+    emittingSmoke: boolean;
+    persistentSmoke: boolean;
+    currentStrokeId: number;
+    currentSegmentLabel: string;
+    skywritingProgress: number;
     replayVisible: boolean;
     orbitYaw: number;
     orbitPitch: number;
