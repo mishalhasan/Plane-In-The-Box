@@ -30,6 +30,7 @@ export class SmokeTrailSystem {
   private hasLastEmitPos = false;
   private lastStrokeId = -999;
   private distanceRemainder = 0;
+  private persistentRadiusScale = 1.0;
 
   // Persistent core ribbons per skywriting stroke for crisp letter spine legibility
   private readonly strokePoints = new Map<number, THREE.Vector3[]>();
@@ -262,6 +263,10 @@ export class SmokeTrailSystem {
     this.coreMat.opacity = 0.58 * fade;
   }
 
+  public setPersistentRadiusScale(scale: number): void {
+    this.persistentRadiusScale = Math.max(0.3, Math.min(1.5, scale));
+  }
+
   public reset(): void {
     this.writeCursor = 0;
     this.activeCount = 0;
@@ -321,7 +326,7 @@ export class SmokeTrailSystem {
       return;
     }
 
-    const stepDist = persistent ? 0.036 : 0.075;
+    const stepDist = persistent ? 0.036 * Math.max(0.68, this.persistentRadiusScale) : 0.075;
     const segVec = new THREE.Vector3().subVectors(worldPos, this.lastEmitPos);
     const segLen = segVec.length();
 
@@ -357,13 +362,13 @@ export class SmokeTrailSystem {
       this.puffGeo.instanceCount = this.activeCount;
     }
 
-    const jitter = persistent ? 0.014 : 0.025;
+    const jitter = persistent ? 0.014 * this.persistentRadiusScale : 0.025;
     this.origins[idx * 3] = pos.x + (Math.random() - 0.5) * jitter;
     this.origins[idx * 3 + 1] = pos.y + (Math.random() - 0.5) * jitter;
     this.origins[idx * 3 + 2] = pos.z + (Math.random() - 0.5) * jitter;
 
     const baseRadius = persistent
-      ? 0.092 + Math.random() * 0.030
+      ? (0.092 + Math.random() * 0.030) * this.persistentRadiusScale
       : 0.13 + Math.random() * 0.05;
 
     this.birthAndFlags[idx * 4] = birthTime;
@@ -408,7 +413,7 @@ export class SmokeTrailSystem {
         : new THREE.CatmullRomCurve3(pts, false, 'centripetal', 0.4);
 
     const tubularSegs = Math.min(96, Math.max(4, pts.length * 2));
-    const tubeGeo = new THREE.TubeGeometry(curve, tubularSegs, 0.038, 6, false);
+    const tubeGeo = new THREE.TubeGeometry(curve, tubularSegs, 0.038 * this.persistentRadiusScale, 6, false);
     const mesh = new THREE.Mesh(tubeGeo, this.coreMat);
     mesh.renderOrder = 2;
     this.group.add(mesh);
