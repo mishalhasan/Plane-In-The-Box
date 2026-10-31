@@ -8,7 +8,7 @@ export const ORYX_WORLD_CONFIG = {
   svgMaxY: 74.65,
   svgRefX: 256.8,
   worldScale: 0.045,
-  worldBottomY: 2.38,
+  worldBottomY: 3.32,
   worldZ: -0.55
 } as const;
 
@@ -243,11 +243,11 @@ export class OryxFinaleChoreographer implements Choreographer {
     const pStart = new THREE.Vector3(0.0, 0.15, 0.0);
     const tStart = new THREE.Vector3(0.02, 0.96, 0.28).normalize();
 
-    const pStarboard = new THREE.Vector3(1.36, 1.72, 1.98);
-    const tStarboard = new THREE.Vector3(-0.34, 0.22, 0.91).normalize();
+    const pStarboard = new THREE.Vector3(1.36, 1.82, 1.98);
+    const tStarboard = new THREE.Vector3(-0.34, 0.25, 0.906).normalize();
 
-    const pPort = new THREE.Vector3(-1.82, 2.02, 1.02);
-    const tPort = new THREE.Vector3(-0.26, 0.58, -0.77).normalize();
+    const pPort = new THREE.Vector3(-1.86, 2.48, 0.96);
+    const tPort = new THREE.Vector3(-0.24, 0.64, -0.73).normalize();
 
     const cClimb = new THREE.CubicBezierCurve3(
       pStart,
@@ -423,21 +423,21 @@ export class OryxFinaleChoreographer implements Choreographer {
   ): FlightSegment[] {
     // 1. Wide background twilight sweep (smoke OFF so the newly drawn Oryx + revealing
     //    "QATAR AIRWAYS" wordmark take center stage) leading around to port foreground.
-    const apex1 = new THREE.Vector3(4.55, 4.10, -3.25);
-    const apex1Tan = new THREE.Vector3(-0.28, 0.16, -0.946).normalize();
+    const apex1 = new THREE.Vector3(4.65, 4.72, -3.15);
+    const apex1Tan = new THREE.Vector3(-0.28, 0.14, -0.949).normalize();
 
-    const apex2 = new THREE.Vector3(-1.65, 4.55, -4.65);
-    const apex2Tan = new THREE.Vector3(-0.93, -0.18, 0.32).normalize();
+    const apex2 = new THREE.Vector3(-2.35, 4.92, -4.15);
+    const apex2Tan = new THREE.Vector3(-0.92, -0.22, 0.32).normalize();
 
-    const entryPos = new THREE.Vector3(-6.55, 2.22, 1.32);
-    const entryTan = new THREE.Vector3(0.76, -0.26, 0.595).normalize();
+    const entryPos = new THREE.Vector3(-6.45, 2.28, 5.75);
+    const entryTan = new THREE.Vector3(0.94, -0.17, 0.295).normalize();
 
-    // 2. Restored graceful left-to-right foreground wing-wave salute pass & horizon climb
-    const saluteMid = new THREE.Vector3(0.85, 1.02, 4.30);
-    const saluteMidTan = new THREE.Vector3(0.95, 0.14, -0.28).normalize();
+    // 2. Graceful left-to-right foreground salute pass showcasing the fuselage livery & horizon climb
+    const saluteMid = new THREE.Vector3(0.75, 1.48, 7.35);
+    const saluteMidTan = new THREE.Vector3(0.985, 0.085, -0.15).normalize();
 
-    const flybyExit = new THREE.Vector3(18.5, 6.8, -10.5);
-    const flybyExitTan = new THREE.Vector3(0.76, 0.34, -0.55).normalize();
+    const flybyExit = new THREE.Vector3(16.8, 5.95, -3.6);
+    const flybyExitTan = new THREE.Vector3(0.81, 0.34, -0.478).normalize();
 
     const pull1 = new THREE.CubicBezierCurve3(
       startPos.clone(),
@@ -449,32 +449,32 @@ export class OryxFinaleChoreographer implements Choreographer {
 
     const pull2 = new THREE.CubicBezierCurve3(
       apex1.clone(),
-      apex1.clone().addScaledVector(apex1Tan, 2.45),
-      apex2.clone().addScaledVector(apex2Tan, -2.45),
+      apex1.clone().addScaledVector(apex1Tan, 2.55),
+      apex2.clone().addScaledVector(apex2Tan, -2.55),
       apex2
     );
     pull2.arcLengthDivisions = 300;
 
     const pull3 = new THREE.CubicBezierCurve3(
       apex2.clone(),
-      apex2.clone().addScaledVector(apex2Tan, 2.85),
-      entryPos.clone().addScaledVector(entryTan, -2.85),
+      apex2.clone().addScaledVector(apex2Tan, 3.35),
+      entryPos.clone().addScaledVector(entryTan, -3.35),
       entryPos
     );
     pull3.arcLengthDivisions = 300;
 
     const passCurve = new THREE.CubicBezierCurve3(
       entryPos.clone(),
-      entryPos.clone().addScaledVector(entryTan, 3.05),
-      saluteMid.clone().addScaledVector(saluteMidTan, -3.05),
+      entryPos.clone().addScaledVector(entryTan, 2.65),
+      saluteMid.clone().addScaledVector(saluteMidTan, -2.65),
       saluteMid
     );
     passCurve.arcLengthDivisions = 300;
 
     const exitCurve = new THREE.CubicBezierCurve3(
       saluteMid.clone(),
-      saluteMid.clone().addScaledVector(saluteMidTan, 5.4),
-      flybyExit.clone().addScaledVector(flybyExitTan, -6.2),
+      saluteMid.clone().addScaledVector(saluteMidTan, 5.6),
+      flybyExit.clone().addScaledVector(flybyExitTan, -5.8),
       flybyExit
     );
     exitCurve.arcLengthDivisions = 300;
@@ -482,7 +482,7 @@ export class OryxFinaleChoreographer implements Choreographer {
     return [
       {
         curve: pull1,
-        duration: pull1.getLength() / 9.8,
+        duration: pull1.getLength() / 10.2,
         emitSmoke: false,
         persistentSmoke: false,
         strokeId: -2,
@@ -490,7 +490,7 @@ export class OryxFinaleChoreographer implements Choreographer {
       },
       {
         curve: pull2,
-        duration: pull2.getLength() / 10.6,
+        duration: pull2.getLength() / 11.4,
         emitSmoke: false,
         persistentSmoke: false,
         strokeId: -2,
@@ -498,7 +498,7 @@ export class OryxFinaleChoreographer implements Choreographer {
       },
       {
         curve: pull3,
-        duration: pull3.getLength() / 10.8,
+        duration: pull3.getLength() / 12.6,
         emitSmoke: false,
         persistentSmoke: false,
         strokeId: -2,
@@ -506,7 +506,7 @@ export class OryxFinaleChoreographer implements Choreographer {
       },
       {
         curve: passCurve,
-        duration: passCurve.getLength() / 7.2,
+        duration: passCurve.getLength() / 5.65,
         emitSmoke: true,
         persistentSmoke: false,
         strokeId: -3,
@@ -515,7 +515,7 @@ export class OryxFinaleChoreographer implements Choreographer {
       },
       {
         curve: exitCurve,
-        duration: exitCurve.getLength() / 9.6,
+        duration: exitCurve.getLength() / 9.2,
         emitSmoke: true,
         persistentSmoke: false,
         strokeId: -3,
@@ -564,10 +564,21 @@ export class OryxFinaleChoreographer implements Choreographer {
 
     if (chosen.wingWave) {
       const isPass = chosen.label === 'Oryx Finale Salute Pass';
-      const waveWindow = isPass ? (localT - 0.48) / 0.52 : localT / 0.36;
-      if (waveWindow > 0 && waveWindow < 1) {
-        const env = Math.sin(waveWindow * Math.PI);
-        targetRoll += Math.sin(waveWindow * Math.PI * 3.0) * 0.42 * env;
+      if (isPass) {
+        // Gentle airshow photo-pass wing dip so starboard wing/winglet stay cleanly below "QATAR AIRWAYS" fuselage title
+        targetRoll = 0.08 + 0.32 * Math.sin(localT * Math.PI);
+        const waveWindow = (localT - 0.56) / 0.44;
+        if (waveWindow > 0 && waveWindow < 1) {
+          const env = Math.sin(waveWindow * Math.PI);
+          targetRoll += Math.sin(waveWindow * Math.PI * 2.0) * 0.16 * env;
+        }
+      } else {
+        targetRoll = Math.max(-0.20, targetRoll * 0.50 + 0.24 * Math.max(0, 1 - localT * 2.2));
+        const waveWindow = localT / 0.34;
+        if (waveWindow > 0 && waveWindow < 1) {
+          const env = Math.sin(waveWindow * Math.PI);
+          targetRoll += Math.sin(waveWindow * Math.PI * 2.0) * 0.18 * env;
+        }
       }
     }
 

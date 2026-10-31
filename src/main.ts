@@ -89,7 +89,7 @@ class AviationJackInTheBoxApp {
 
   // DOM HUD elements
   private readonly phaseLabelEl: HTMLElement;
-  private readonly headerTitleEl: HTMLElement;
+  private readonly headerTitleEl: HTMLElement | null;
   private readonly audioToggleBtn: HTMLButtonElement;
   private readonly audioBarsEl: HTMLElement;
   private readonly audioLabelEl: HTMLElement;
@@ -106,7 +106,7 @@ class AviationJackInTheBoxApp {
   constructor() {
     this.container = document.getElementById('canvas-container')!;
     this.phaseLabelEl = document.getElementById('ife-phase-label')!;
-    this.headerTitleEl = document.getElementById('ife-header-title')!;
+    this.headerTitleEl = document.getElementById('ife-header-title');
     this.audioToggleBtn = document.getElementById('audio-toggle') as HTMLButtonElement;
     this.audioBarsEl = document.getElementById('audio-bars')!;
     this.audioLabelEl = document.getElementById('audio-label')!;
@@ -568,7 +568,7 @@ class AviationJackInTheBoxApp {
     switch (next) {
       case 'IDLE_WINDING':
         this.phaseLabelEl.textContent = 'READY TO WIND';
-        this.headerTitleEl.classList.remove('dimmed');
+        this.headerTitleEl?.classList.remove('dimmed');
         this.windingHudEl.classList.remove('hidden');
         this.finaleHudEl.classList.add('hidden');
         this.crankCalloutEl.classList.remove('hidden');
@@ -589,14 +589,14 @@ class AviationJackInTheBoxApp {
 
       case 'AEROBATIC_LAUNCH':
         this.phaseLabelEl.textContent = 'AEROBATIC DEPARTURE';
-        this.headerTitleEl.classList.add('dimmed');
+        this.headerTitleEl?.classList.add('dimmed');
         this.airplane.root.visible = true;
         this.activeChoreographer.resetRoll();
         break;
 
       case 'SKYWRITING':
         this.phaseLabelEl.textContent =
-          this.finaleVariant === 'oryx' ? 'TRACING ORYX EMBLEM' : 'AERIAL SKYWRITING';
+          this.finaleVariant === 'oryx' ? 'SKY SIGNATURE' : 'AERIAL SKYWRITING';
         break;
 
       case 'FINAL_FLYBY':
@@ -606,8 +606,8 @@ class AviationJackInTheBoxApp {
 
       case 'SETTLED_END':
         this.resetOrbitState();
-        this.phaseLabelEl.textContent = 'QATAR AIRWAYS';
-        this.headerTitleEl.classList.remove('dimmed');
+        this.phaseLabelEl.textContent = 'OVER AND OUT';
+        this.headerTitleEl?.classList.remove('dimmed');
         this.airplane.root.visible = false;
         this.sound.updateFlightAudio(false, 0, 15, false);
         this.finaleHudEl.classList.remove('hidden');
@@ -822,18 +822,18 @@ class AviationJackInTheBoxApp {
 
       if (this.finaleVariant === 'oryx') {
         this.oryxWordmark.update(this.elapsed, 0);
-        const stageZ = this.getResponsiveOryxCameraZ(14.35);
+        const stageZ = this.getResponsiveOryxCameraZ(15.35);
         const blend = THREE.MathUtils.smoothstep(sample.normalizedProgress, 0.0, 0.72);
         const baseZ = THREE.MathUtils.lerp(7.6, stageZ, blend);
 
         this.targetCamPos.set(
           sample.position.x * 0.14 * (1 - blend * 0.65) + this.parallaxSmoothed.x * 0.65,
-          THREE.MathUtils.lerp(0.85, 1.62, blend) + this.parallaxSmoothed.y * 0.32,
+          THREE.MathUtils.lerp(0.85, 1.98, blend) + this.parallaxSmoothed.y * 0.32,
           baseZ
         );
         this.targetCamLook.set(
           sample.position.x * 0.10 * (1 - blend * 0.70),
-          THREE.MathUtils.lerp(0.45, 1.72, blend),
+          THREE.MathUtils.lerp(0.45, 2.16, blend),
           THREE.MathUtils.lerp(0.0, -0.45, blend)
         );
       } else {
@@ -894,21 +894,21 @@ class AviationJackInTheBoxApp {
 
         // Keep the Jack-in-the-Box and circular platform 100% anchored in frame while subtly breathing with the aircraft
         const pullT = THREE.MathUtils.smoothstep(sample.normalizedProgress, 0.78, 1.0);
-        const stageZ = this.getResponsiveOryxCameraZ(14.35);
+        const stageZ = this.getResponsiveOryxCameraZ(15.35);
 
-        const tracePosX = sample.position.x * 0.07;
-        const tracePosY = 1.62 + (sample.position.y - 4.0) * 0.035;
-        const traceLookX = sample.position.x * 0.05;
-        const traceLookY = 1.72 + (sample.position.y - 4.0) * 0.04;
+        const tracePosX = sample.position.x * 0.065;
+        const tracePosY = 1.98 + (sample.position.y - 4.8) * 0.03;
+        const traceLookX = sample.position.x * 0.045;
+        const traceLookY = 2.16 + (sample.position.y - 4.8) * 0.035;
 
         this.targetCamPos.set(
           THREE.MathUtils.lerp(tracePosX, 0.0, pullT) + this.parallaxSmoothed.x * 0.75,
-          THREE.MathUtils.lerp(tracePosY, 1.62, pullT) + this.parallaxSmoothed.y * 0.34,
+          THREE.MathUtils.lerp(tracePosY, 1.98, pullT) + this.parallaxSmoothed.y * 0.34,
           stageZ
         );
         this.targetCamLook.set(
           THREE.MathUtils.lerp(traceLookX, 0.0, pullT) + this.parallaxSmoothed.x * 0.14,
-          THREE.MathUtils.lerp(traceLookY, 1.72, pullT) + this.parallaxSmoothed.y * 0.10,
+          THREE.MathUtils.lerp(traceLookY, 2.16, pullT) + this.parallaxSmoothed.y * 0.10,
           -0.45
         );
       } else {
@@ -963,15 +963,15 @@ class AviationJackInTheBoxApp {
         const wordProg = THREE.MathUtils.clamp((this.phaseTime - 0.06) / 1.20, 0, 1);
         this.oryxWordmark.update(this.elapsed, wordProg);
 
-        const stageZ = this.getResponsiveOryxCameraZ(14.35);
+        const stageZ = this.getResponsiveOryxCameraZ(15.35);
         this.targetCamPos.set(
           this.parallaxSmoothed.x * 0.80,
-          1.62 + this.parallaxSmoothed.y * 0.34,
+          1.98 + this.parallaxSmoothed.y * 0.34,
           stageZ
         );
         this.targetCamLook.set(
           this.parallaxSmoothed.x * 0.16,
-          1.72 + this.parallaxSmoothed.y * 0.10,
+          2.16 + this.parallaxSmoothed.y * 0.10,
           -0.45
         );
       } else {
@@ -1005,14 +1005,14 @@ class AviationJackInTheBoxApp {
       if (this.finaleVariant === 'oryx') {
         this.oryxWordmark.update(this.elapsed, 1.0);
 
-        const stageZ = this.getResponsiveOryxCameraZ(14.35);
-        const pivotY = 0.65;
+        const stageZ = this.getResponsiveOryxCameraZ(15.35);
+        const pivotY = 0.85;
         const yaw = this.orbitYaw;
-        const neutralRadius = Math.hypot(1.62 - pivotY, stageZ);
+        const neutralRadius = Math.hypot(1.98 - pivotY, stageZ);
         const baseRadius = neutralRadius + Math.abs(Math.sin(yaw)) * 2.2;
-        const basePitch = Math.asin((1.62 - pivotY) / neutralRadius);
+        const basePitch = Math.asin((1.98 - pivotY) / neutralRadius);
 
-        const radius = THREE.MathUtils.clamp(baseRadius + this.orbitZoom, Math.max(7.6, baseRadius - 6.5), baseRadius + 3.0);
+        const radius = THREE.MathUtils.clamp(baseRadius + this.orbitZoom, Math.max(7.8, baseRadius - 6.5), baseRadius + 3.0);
         const pitch = basePitch + this.orbitPitch;
         const cosPitch = Math.cos(pitch);
         const rightX = Math.cos(yaw);
@@ -1020,7 +1020,7 @@ class AviationJackInTheBoxApp {
 
         const zoomInBlend = THREE.MathUtils.clamp(-this.orbitZoom / 6.5, 0, 1);
         const lookBaseX = Math.sin(yaw) * 0.55 * (1 - zoomInBlend * 0.65);
-        const lookBaseY = THREE.MathUtils.lerp(1.72, 0.55, zoomInBlend * 0.60);
+        const lookBaseY = THREE.MathUtils.lerp(2.16, 0.65, zoomInBlend * 0.60);
 
         this.targetCamPos.set(
           Math.sin(yaw) * cosPitch * radius + rightX * this.parallaxSmoothed.x * 0.80,

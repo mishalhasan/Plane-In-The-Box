@@ -16,8 +16,8 @@ export class OryxWordmark {
   private wordmarkMesh!: THREE.Mesh;
   private wordmarkMat!: THREE.ShaderMaterial;
 
-  /** Centered cleanly between the open box lid (y ~ 1.50) and Oryx neck base (y ~ 2.38) */
-  private readonly wordmarkBaseY = 1.93;
+  /** Centered with generous breathing room between the open box lid (y ~ 1.50) and Oryx neck base (y ~ 3.18) */
+  private readonly wordmarkBaseY = 2.42;
   private revealProgress = 0;
 
   constructor(scene: THREE.Scene) {
