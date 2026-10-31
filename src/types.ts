@@ -74,6 +74,7 @@ export interface AppDebugAPI {
     currentStrokeId: number;
     currentSegmentLabel: string;
     skywritingProgress: number;
+    wordmarkRevealProgress: number;
     replayVisible: boolean;
     orbitYaw: number;
     orbitPitch: number;

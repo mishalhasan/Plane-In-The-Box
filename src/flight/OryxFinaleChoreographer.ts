@@ -6,9 +6,9 @@ export const ORYX_WORLD_CONFIG = {
   svgMaxX: 295.58,
   svgMinY: 0.0,
   svgMaxY: 74.65,
-  svgRefX: 255.5,
-  worldScale: 0.075,
-  worldBottomY: 1.78,
+  svgRefX: 256.8,
+  worldScale: 0.045,
+  worldBottomY: 2.38,
   worldZ: -0.55
 } as const;
 
@@ -16,7 +16,7 @@ export function oryxSvgToWorld(svgX: number, svgY: number, zOffset = 0): THREE.V
   return new THREE.Vector3(
     (svgX - ORYX_WORLD_CONFIG.svgRefX) * ORYX_WORLD_CONFIG.worldScale,
     ORYX_WORLD_CONFIG.worldBottomY + (ORYX_WORLD_CONFIG.svgMaxY - svgY) * ORYX_WORLD_CONFIG.worldScale,
-    ORYX_WORLD_CONFIG.worldZ + zOffset
+    ORYX_WORLD_CONFIG.worldZ + zOffset * 0.65
   );
 }
 
@@ -27,16 +27,13 @@ interface OryxContourStroke {
 
 /**
  * Physical Qatar Airways Oryx Skywriting Choreographer:
- * Every visible stroke of the Arabian Oryx emblem is physically drawn in 3D space
- * by smoke emitted from the moving aircraft's tail nozzle—zero pre-rendered logo
- * geometry, textures, or opacity fade-ins.
- *
  * 1. Short ascending 3D launch out of the Jack-in-the-Box into the Oryx snout.
  * 2. 10 C2-smooth contour strokes derived from the official ORYX_EMBLEM_PATH
- *    (forehead & upper horn, lower horn & jaw, facial-mask crescent, arched throat/neck,
- *    rear neck taper, pointed ear crown & underside, and 3 wind-swept mane stripes),
- *    ordered as wide figure-eight passes with smoke disabled on all 3D banking turns.
- * 3. Concise foreground wing-wave salute flyby beneath the completed smoke-drawn Oryx.
+ *    at a balanced 0.045 world scale (~3.42u wide x 3.36u tall) above the box,
+ *    with smoke disabled on all 3D banking turns between disconnected strokes.
+ * 3. Panoramic setup arc (while "QATAR AIRWAYS" illuminates beneath the Oryx)
+ *    followed by the restored left-to-right foreground wing-wave salute flyby
+ *    and graceful twilight horizon climb.
  */
 export class OryxFinaleChoreographer implements Choreographer {
   public readonly launchSegments: FlightSegment[] = [];
@@ -82,11 +79,11 @@ export class OryxFinaleChoreographer implements Choreographer {
     this.skywritingSegments = this.buildPhysicalSkywritingSequence(strokeCurves);
     this.skywritingDuration = this.sumDuration(this.skywritingSegments);
 
-    // 3. Concise finale flyby continuing seamlessly from the final Oryx stroke
+    // 3. Restored panoramic setup + graceful left-to-right foreground salute flyby
     const lastSeg = this.skywritingSegments[this.skywritingSegments.length - 1];
     const endPos = lastSeg.curve.getPointAt(1);
     const endTan = lastSeg.curve.getTangentAt(1).normalize();
-    this.flybySegments = this.buildShortFlybySequence(endPos, endTan);
+    this.flybySegments = this.buildFinalFlybySequence(endPos, endTan);
     this.flybyDuration = this.sumDuration(this.flybySegments);
   }
 
@@ -101,10 +98,11 @@ export class OryxFinaleChoreographer implements Choreographer {
   private computeSmoothDuration(
     curve: THREE.Curve<THREE.Vector3>,
     targetSpeed: number,
-    maxOmegaRadPerSec = 7.6
+    maxOmegaRadPerSec = 7.4,
+    minSpeed = 2.35
   ): number {
     const len = curve.getLength();
-    const steps = Math.max(20, Math.ceil(len / 0.05));
+    const steps = Math.max(20, Math.ceil(len / 0.04));
     const ds = len / steps;
     let maxKappa = 0;
     let prev = curve.getTangentAt(0).normalize();
@@ -119,7 +117,7 @@ export class OryxFinaleChoreographer implements Choreographer {
     }
 
     const safeSpeed = maxKappa > 0.01 ? Math.min(targetSpeed, maxOmegaRadPerSec / maxKappa) : targetSpeed;
-    return Math.max(0.18, len / Math.max(3.3, safeSpeed));
+    return Math.max(0.15, len / Math.max(minSpeed, safeSpeed));
   }
 
   /**
@@ -245,24 +243,24 @@ export class OryxFinaleChoreographer implements Choreographer {
     const pStart = new THREE.Vector3(0.0, 0.15, 0.0);
     const tStart = new THREE.Vector3(0.02, 0.96, 0.28).normalize();
 
-    const pStarboard = new THREE.Vector3(1.52, 1.88, 2.24);
+    const pStarboard = new THREE.Vector3(1.36, 1.72, 1.98);
     const tStarboard = new THREE.Vector3(-0.34, 0.22, 0.91).normalize();
 
-    const pPort = new THREE.Vector3(-2.38, 2.12, 1.24);
-    const tPort = new THREE.Vector3(-0.32, 0.54, -0.78).normalize();
+    const pPort = new THREE.Vector3(-1.82, 2.02, 1.02);
+    const tPort = new THREE.Vector3(-0.26, 0.58, -0.77).normalize();
 
     const cClimb = new THREE.CubicBezierCurve3(
       pStart,
-      pStart.clone().addScaledVector(tStart, 1.18),
-      pStarboard.clone().addScaledVector(tStarboard, -1.24),
+      pStart.clone().addScaledVector(tStart, 1.05),
+      pStarboard.clone().addScaledVector(tStarboard, -1.12),
       pStarboard
     );
     cClimb.arcLengthDivisions = 300;
 
     const cSweep = new THREE.CubicBezierCurve3(
       pStarboard,
-      pStarboard.clone().addScaledVector(tStarboard, 1.56),
-      pPort.clone().addScaledVector(tPort, -1.56),
+      pStarboard.clone().addScaledVector(tStarboard, 1.32),
+      pPort.clone().addScaledVector(tPort, -1.32),
       pPort
     );
     cSweep.arcLengthDivisions = 300;
@@ -279,7 +277,7 @@ export class OryxFinaleChoreographer implements Choreographer {
     return [
       {
         curve: cClimb,
-        duration: this.computeSmoothDuration(cClimb, 5.2),
+        duration: this.computeSmoothDuration(cClimb, 4.9),
         emitSmoke: false,
         persistentSmoke: false,
         strokeId: -1,
@@ -287,7 +285,7 @@ export class OryxFinaleChoreographer implements Choreographer {
       },
       {
         curve: cSweep,
-        duration: this.computeSmoothDuration(cSweep, 5.5),
+        duration: this.computeSmoothDuration(cSweep, 5.2),
         emitSmoke: false,
         persistentSmoke: false,
         strokeId: -1,
@@ -295,7 +293,7 @@ export class OryxFinaleChoreographer implements Choreographer {
       },
       {
         curve: cApproach,
-        duration: this.computeSmoothDuration(cApproach, 5.5),
+        duration: this.computeSmoothDuration(cApproach, 5.0),
         emitSmoke: false,
         persistentSmoke: false,
         strokeId: -1,
@@ -330,25 +328,25 @@ export class OryxFinaleChoreographer implements Choreographer {
 
     const perpChord = chord.clone().addScaledVector(outDir, -chord.dot(outDir));
     perpChord.z = 0;
-    const isHairpin = t0.dot(t1) < -0.35 && dist < 1.1;
-    const latSep = Math.max(isHairpin ? 1.55 : 1.12, perpChord.length());
-    const loopR = Math.max(isHairpin ? 1.32 : 0.98, Math.min(1.68, latSep * 0.52 + 0.44));
+    const isHairpin = t0.dot(t1) < -0.35 && dist < 0.75;
+    const latSep = Math.max(isHairpin ? 1.02 : 0.74, perpChord.length());
+    const loopR = Math.max(isHairpin ? 0.88 : 0.64, Math.min(1.12, latSep * 0.50 + 0.30));
 
     const mid = p0
       .clone()
       .add(p1)
       .multiplyScalar(0.5)
       .addScaledVector(outDir, loopR * (isHairpin ? 0.96 : 0.86))
-      .add(new THREE.Vector3(0, 0, zSign * (isHairpin ? 0.62 : 0.48)));
+      .add(new THREE.Vector3(0, 0, zSign * (isHairpin ? 0.42 : 0.34)));
 
     const midTan =
-      perpChord.lengthSq() > 0.04
+      perpChord.lengthSq() > 0.025
         ? perpChord.clone().normalize()
         : new THREE.Vector3(-outDir.y, outDir.x, 0).normalize();
     midTan.z = 0;
 
-    const h1 = Math.max(0.45, p0.distanceTo(mid) * 0.46);
-    const h2 = Math.max(0.45, mid.distanceTo(p1) * 0.46);
+    const h1 = Math.max(0.30, p0.distanceTo(mid) * 0.46);
+    const h2 = Math.max(0.30, mid.distanceTo(p1) * 0.46);
 
     const c1 = new THREE.CubicBezierCurve3(
       p0.clone(),
@@ -371,8 +369,8 @@ export class OryxFinaleChoreographer implements Choreographer {
     strokes: Array<{ label: string; curve: THREE.CatmullRomCurve3 }>
   ): FlightSegment[] {
     const segments: FlightSegment[] = [];
-    const writeSpeed = 5.65;
-    const bankSpeed = 6.05;
+    const writeSpeed = 4.95;
+    const bankSpeed = 5.45;
 
     for (let i = 0; i < strokes.length; i++) {
       const { label, curve } = strokes[i];
@@ -419,67 +417,106 @@ export class OryxFinaleChoreographer implements Choreographer {
     return segments;
   }
 
-  private buildShortFlybySequence(
+  private buildFinalFlybySequence(
     startPos: THREE.Vector3,
     startTan: THREE.Vector3
   ): FlightSegment[] {
-    // Bank cleanly around starboard with smoke OFF as the camera frames the completed Oryx,
-    // then sweep across the foreground beneath the emblem with a celebratory wing-wave salute.
-    const starTurn = new THREE.Vector3(4.55, 2.55, 1.85);
-    const starTurnTan = new THREE.Vector3(-0.36, -0.34, 0.87).normalize();
+    // 1. Wide background twilight sweep (smoke OFF so the newly drawn Oryx + revealing
+    //    "QATAR AIRWAYS" wordmark take center stage) leading around to port foreground.
+    const apex1 = new THREE.Vector3(4.55, 4.10, -3.25);
+    const apex1Tan = new THREE.Vector3(-0.28, 0.16, -0.946).normalize();
 
-    const saluteMid = new THREE.Vector3(-0.35, 1.18, 3.85);
-    const saluteMidTan = new THREE.Vector3(-0.96, 0.08, -0.26).normalize();
+    const apex2 = new THREE.Vector3(-1.65, 4.55, -4.65);
+    const apex2Tan = new THREE.Vector3(-0.93, -0.18, 0.32).normalize();
 
-    const horizonExit = new THREE.Vector3(-12.4, 4.9, -5.2);
-    const horizonExitTan = new THREE.Vector3(-0.78, 0.34, -0.52).normalize();
+    const entryPos = new THREE.Vector3(-6.55, 2.22, 1.32);
+    const entryTan = new THREE.Vector3(0.76, -0.26, 0.595).normalize();
 
-    const arc1 = new THREE.CubicBezierCurve3(
+    // 2. Restored graceful left-to-right foreground wing-wave salute pass & horizon climb
+    const saluteMid = new THREE.Vector3(0.85, 1.02, 4.30);
+    const saluteMidTan = new THREE.Vector3(0.95, 0.14, -0.28).normalize();
+
+    const flybyExit = new THREE.Vector3(18.5, 6.8, -10.5);
+    const flybyExitTan = new THREE.Vector3(0.76, 0.34, -0.55).normalize();
+
+    const pull1 = new THREE.CubicBezierCurve3(
       startPos.clone(),
-      startPos.clone().addScaledVector(startTan, 1.75),
-      starTurn.clone().addScaledVector(starTurnTan, -1.75),
-      starTurn
+      startPos.clone().addScaledVector(startTan, 1.85),
+      apex1.clone().addScaledVector(apex1Tan, -1.85),
+      apex1
     );
-    arc1.arcLengthDivisions = 300;
+    pull1.arcLengthDivisions = 300;
 
-    const salutePass = new THREE.CubicBezierCurve3(
-      starTurn.clone(),
-      starTurn.clone().addScaledVector(starTurnTan, 2.55),
-      saluteMid.clone().addScaledVector(saluteMidTan, -2.55),
+    const pull2 = new THREE.CubicBezierCurve3(
+      apex1.clone(),
+      apex1.clone().addScaledVector(apex1Tan, 2.45),
+      apex2.clone().addScaledVector(apex2Tan, -2.45),
+      apex2
+    );
+    pull2.arcLengthDivisions = 300;
+
+    const pull3 = new THREE.CubicBezierCurve3(
+      apex2.clone(),
+      apex2.clone().addScaledVector(apex2Tan, 2.85),
+      entryPos.clone().addScaledVector(entryTan, -2.85),
+      entryPos
+    );
+    pull3.arcLengthDivisions = 300;
+
+    const passCurve = new THREE.CubicBezierCurve3(
+      entryPos.clone(),
+      entryPos.clone().addScaledVector(entryTan, 3.05),
+      saluteMid.clone().addScaledVector(saluteMidTan, -3.05),
       saluteMid
     );
-    salutePass.arcLengthDivisions = 300;
+    passCurve.arcLengthDivisions = 300;
 
-    const horizonClimb = new THREE.CubicBezierCurve3(
+    const exitCurve = new THREE.CubicBezierCurve3(
       saluteMid.clone(),
-      saluteMid.clone().addScaledVector(saluteMidTan, 4.4),
-      horizonExit.clone().addScaledVector(horizonExitTan, -4.8),
-      horizonExit
+      saluteMid.clone().addScaledVector(saluteMidTan, 5.4),
+      flybyExit.clone().addScaledVector(flybyExitTan, -6.2),
+      flybyExit
     );
-    horizonClimb.arcLengthDivisions = 300;
+    exitCurve.arcLengthDivisions = 300;
 
     return [
       {
-        curve: arc1,
-        duration: this.computeSmoothDuration(arc1, 6.8),
+        curve: pull1,
+        duration: pull1.getLength() / 9.8,
         emitSmoke: false,
         persistentSmoke: false,
         strokeId: -2,
-        label: 'Flyby Starboard Turn'
+        label: 'Flyby Panorama Turn A'
       },
       {
-        curve: salutePass,
-        duration: this.computeSmoothDuration(salutePass, 7.6),
+        curve: pull2,
+        duration: pull2.getLength() / 10.6,
         emitSmoke: false,
+        persistentSmoke: false,
+        strokeId: -2,
+        label: 'Flyby Panorama Turn B'
+      },
+      {
+        curve: pull3,
+        duration: pull3.getLength() / 10.8,
+        emitSmoke: false,
+        persistentSmoke: false,
+        strokeId: -2,
+        label: 'Flyby Panorama Turn C'
+      },
+      {
+        curve: passCurve,
+        duration: passCurve.getLength() / 7.2,
+        emitSmoke: true,
         persistentSmoke: false,
         strokeId: -3,
         wingWave: true,
         label: 'Oryx Finale Salute Pass'
       },
       {
-        curve: horizonClimb,
-        duration: this.computeSmoothDuration(horizonClimb, 9.2),
-        emitSmoke: false,
+        curve: exitCurve,
+        duration: exitCurve.getLength() / 9.6,
+        emitSmoke: true,
         persistentSmoke: false,
         strokeId: -3,
         wingWave: true,
@@ -523,7 +560,7 @@ export class OryxFinaleChoreographer implements Choreographer {
     chosen.curve.getTangentAt(uB, this._tmpTanAhead).normalize();
 
     this._tmpCross.crossVectors(this._tmpTanBehind, this._tmpTanAhead);
-    let targetRoll = THREE.MathUtils.clamp(-this._tmpCross.y * 5.0, -0.92, 0.92);
+    let targetRoll = THREE.MathUtils.clamp(-this._tmpCross.y * 5.0, -0.94, 0.94);
 
     if (chosen.wingWave) {
       const isPass = chosen.label === 'Oryx Finale Salute Pass';
@@ -577,7 +614,7 @@ export class OryxFinaleChoreographer implements Choreographer {
       const u0 = tStart <= segStart ? 0 : Math.max(0, Math.min(1, (tStart - segStart) / seg.duration));
       const u1 = tEnd >= segEnd ? 1 : Math.max(0, Math.min(1, (tEnd - segStart) / seg.duration));
       const arcSpan = Math.max(0, u1 - u0) * seg.curve.getLength();
-      const steps = Math.max(u0 === 0 || u1 === 1 ? 3 : 1, Math.ceil(arcSpan / 0.022));
+      const steps = Math.max(u0 === 0 || u1 === 1 ? 3 : 1, Math.ceil(arcSpan / 0.018));
 
       for (let s = 0; s <= steps; s++) {
         if (s === 0 && u0 > 0) continue;

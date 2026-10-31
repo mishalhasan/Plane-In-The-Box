@@ -85,6 +85,7 @@ export class SmokeTrailSystem {
       uniforms: {
         uTime: { value: 0 },
         uGlobalFade: { value: 1.0 },
+        uPersistentScale: { value: 1.0 },
         uSunDir: { value: new THREE.Vector3(0.52, 0.74, 0.42).normalize() }
       },
       vertexShader: /* glsl */ `
@@ -93,6 +94,7 @@ export class SmokeTrailSystem {
         attribute vec3 iDrift;
 
         uniform float uTime;
+        uniform float uPersistentScale;
 
         varying vec2 vUv;
         varying float vAlpha;
@@ -124,10 +126,10 @@ export class SmokeTrailSystem {
             // Skywriting lettering: starts tight at tail nozzle, billows into lush cloud stroke,
             // then gently breathes in place without drifting out of typographic alignment!
             float bloom = 1.0 - exp(-age * 4.6);
-            radius = mix(0.032, targetRadius, bloom);
+            radius = mix(0.032 * uPersistentScale, targetRadius, bloom);
 
-            // Bounded gentle high-altitude cloud undulation
-            float settle = smoothstep(0.0, 0.8, age);
+            // Bounded gentle high-altitude cloud undulation scaled proportionally to stroke weight
+            float settle = smoothstep(0.0, 0.8, age) * uPersistentScale;
             worldCenter += iDrift * (0.022 * settle) + vec3(
               sin(uTime * 0.9 + seed * 6.28) * 0.014,
               cos(uTime * 0.75 + seed * 4.1) * 0.016,
@@ -265,6 +267,7 @@ export class SmokeTrailSystem {
 
   public setPersistentRadiusScale(scale: number): void {
     this.persistentRadiusScale = Math.max(0.3, Math.min(1.5, scale));
+    this.puffMat.uniforms.uPersistentScale.value = this.persistentRadiusScale;
   }
 
   public reset(): void {
@@ -326,7 +329,7 @@ export class SmokeTrailSystem {
       return;
     }
 
-    const stepDist = persistent ? 0.036 * Math.max(0.68, this.persistentRadiusScale) : 0.075;
+    const stepDist = persistent ? 0.036 * Math.max(0.46, this.persistentRadiusScale) : 0.075;
     const segVec = new THREE.Vector3().subVectors(worldPos, this.lastEmitPos);
     const segLen = segVec.length();
 
