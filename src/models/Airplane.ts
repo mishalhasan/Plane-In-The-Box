@@ -33,10 +33,10 @@ export class Airplane {
 
     const pearlLiveryMat = new THREE.MeshPhysicalMaterial({
       map: this.createFuselageLiveryTexture(),
-      roughness: 0.2,
-      metalness: 0.06,
-      clearcoat: 0.86,
-      clearcoatRoughness: 0.12
+      roughness: 0.25,
+      metalness: 0.05,
+      clearcoat: 0.58,
+      clearcoatRoughness: 0.16
     });
 
     const bellyPearlMat = new THREE.MeshPhysicalMaterial({
@@ -108,10 +108,10 @@ export class Airplane {
   }
 
   private createFuselageLiveryTexture(): THREE.CanvasTexture {
-    // Choose w:h = 1024:2048 (~0.50) to match cylinder circumference (2*PI*0.082 = 0.515) : length (1.00)
-    // so fuselage typography and windows map isotropically with zero stretching.
-    const w = 1024;
-    const h = 2048;
+    // High-resolution 2048x4096 (1:2) texture matching fuselage circumference (~0.536) : length (1.00)
+    // so full "QATAR AIRWAYS" billboard typography maps cleanly with zero stretching or mipmap blur.
+    const w = 2048;
+    const h = 4096;
     const canvas = document.createElement('canvas');
     canvas.width = w;
     canvas.height = h;
@@ -121,104 +121,90 @@ export class Airplane {
     // u = 0 / 1 -> bottom belly (-Y), u = 0.25 -> port (+X), u = 0.50 -> top crown (+Y), u = 0.75 -> starboard (-X)
     // py = 0 -> nose (+Z, v = 1), py = h -> tail (-Z, v = 0)
 
-    // Luminous off-white / light pearl-grey upper fuselage with subtle crown pearl shading
+    // Luminous off-white / light pearl fuselage tuned just below bloom threshold so burgundy lettering stays razor-sharp
     const crownGrad = ctx.createLinearGradient(0, 0, w, 0);
-    crownGrad.addColorStop(0.0, '#f4f5f8');
-    crownGrad.addColorStop(0.28, '#f8f8fa');
-    crownGrad.addColorStop(0.5, '#eceff4');
-    crownGrad.addColorStop(0.72, '#f8f8fa');
-    crownGrad.addColorStop(1.0, '#f4f5f8');
+    crownGrad.addColorStop(0.0, '#e5e8ef');
+    crownGrad.addColorStop(0.26, '#eef0f5');
+    crownGrad.addColorStop(0.5, '#e4e8f0');
+    crownGrad.addColorStop(0.74, '#eef0f5');
+    crownGrad.addColorStop(1.0, '#e5e8ef');
     ctx.fillStyle = crownGrad;
     ctx.fillRect(0, 0, w, h);
 
-    // Qatar Airways light dove pearl-grey underbelly band (u = 0..0.188 and u = 0.812..1.0)
+    // Qatar Airways light dove pearl-grey underbelly band (u = 0..0.176 and u = 0.824..1.0)
     ctx.fillStyle = '#dde0e7';
-    ctx.fillRect(0, h * 0.10, w * 0.188, h * 0.82);
-    ctx.fillRect(w * 0.812, h * 0.10, w * 0.188, h * 0.82);
+    ctx.fillRect(0, h * 0.10, w * 0.176, h * 0.82);
+    ctx.fillRect(w * 0.824, h * 0.10, w * 0.176, h * 0.82);
 
     // Crisp signature burgundy cheatline separating pearl-grey belly from bright upper body
     ctx.fillStyle = '#640736';
-    ctx.fillRect(w * 0.185, h * 0.13, w * 0.0085, h * 0.75);
-    ctx.fillRect(w * 0.8065, h * 0.13, w * 0.0085, h * 0.75);
+    ctx.fillRect(w * 0.173, h * 0.13, w * 0.0085, h * 0.75);
+    ctx.fillRect(w * 0.8185, h * 0.13, w * 0.0085, h * 0.75);
 
     // Subtle cool-silver accent pinstripe right above burgundy cheatline
     ctx.fillStyle = '#b9bfca';
-    ctx.fillRect(w * 0.1955, h * 0.14, w * 0.004, h * 0.73);
-    ctx.fillRect(w * 0.8005, h * 0.14, w * 0.004, h * 0.73);
+    ctx.fillRect(w * 0.184, h * 0.14, w * 0.004, h * 0.73);
+    ctx.fillRect(w * 0.812, h * 0.14, w * 0.004, h * 0.73);
 
     // Sleek A350-style wraparound dark cockpit visor near nose (v = 0.865..0.920 -> py = h * 0.080..0.135)
     const visorY = h * 0.084;
     const visorH = h * 0.044;
     ctx.fillStyle = '#101829';
     ctx.beginPath();
-    ctx.roundRect(w * 0.345, visorY, w * 0.31, visorH, 22);
+    ctx.roundRect(w * 0.345, visorY, w * 0.31, visorH, 44);
     ctx.fill();
 
     // Subtle sky highlight on cockpit glass
     ctx.fillStyle = 'rgba(165, 202, 255, 0.36)';
     ctx.beginPath();
-    ctx.roundRect(w * 0.365, visorY + 8, w * 0.118, visorH * 0.36, 10);
-    ctx.roundRect(w * 0.517, visorY + 8, w * 0.118, visorH * 0.36, 10);
+    ctx.roundRect(w * 0.365, visorY + 16, w * 0.118, visorH * 0.36, 20);
+    ctx.roundRect(w * 0.517, visorY + 16, w * 0.118, visorH * 0.36, 20);
     ctx.fill();
 
-    // Illuminated warm passenger cabin windows along port (u = 0.238) & starboard (u = 0.762)
-    const numWindows = 20;
-    for (let i = 0; i < numWindows; i++) {
-      const v = 0.24 + (i / (numWindows - 1)) * 0.54;
-      const cy = h * (1 - v);
-
-      for (const sideU of [0.238, 0.762]) {
-        const cx = w * sideU;
-        ctx.fillStyle = '#ffdf9e';
-        ctx.beginPath();
-        // Upright oval window: 6.0px along u (vertical on fuselage), 4.4px along v (longitudinal)
-        ctx.ellipse(cx, cy, 6.0, 4.4, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.strokeStyle = 'rgba(88, 96, 112, 0.52)';
-        ctx.lineWidth = 1.4;
-        ctx.stroke();
-      }
-    }
-
-    // Full "QATAR AIRWAYS" burgundy lettering along both sides of the fuselage
+    // Full "QATAR AIRWAYS" billboard burgundy lettering centered along both side flanks above the wing root
     const qatarPath = new Path2D(QATAR_WORDMARK_PATH);
     const airwaysPath = new Path2D(AIRWAYS_WORDMARK_PATH);
-    const airwaysScale = 42.5 / 14.41; // Match cap height of AIRWAYS to QATAR (42.5 units)
-    const totalMarkUnits = 445.7;      // Combined single-line width in wordmark units (with crisp word space)
-    const targetWorldSpan = 0.40;      // Spans z = -0.12 .. +0.28 along constant-radius cylindrical fuselage
+    const airwaysScale = 42.2 / 14.41; // Match cap height of AIRWAYS to QATAR (42.2 units)
+    const totalMarkUnits = 450.1;      // Combined single-line width with clear optical word space
+    const targetWorldSpan = 0.54;      // Spans z = -0.22 .. +0.32 along cylindrical fuselage barrel
     const sLong = (targetWorldSpan * h) / totalMarkUnits;
-    const sCirc = sLong * ((w / (Math.PI * 2 * 0.082)) / h); // Exact 1:1 undistorted aspect ratio on cylinder
+    const sCirc = sLong * (w / (0.5358 * h)) * 1.04; // True undistorted aspect ratio on 1.04-elliptical barrel
 
     const drawSingleLineBrandTitle = (): void => {
-      ctx.fillStyle = '#640736';
+      ctx.fillStyle = '#4e042a';
+      ctx.strokeStyle = '#4e042a';
+      ctx.lineJoin = 'round';
 
-      // "QATAR" (cap top at y = 16.25 -> shifted to y = 0)
+      // "QATAR" (cap top at y = 16.6 -> shifted to y = 0)
       ctx.save();
-      ctx.translate(0, -16.25);
+      ctx.translate(0, -16.6);
+      ctx.lineWidth = 1.45;
       ctx.fill(qatarPath);
+      ctx.stroke(qatarPath);
       ctx.restore();
 
-      // "AIRWAYS" positioned inline with clear optical word space and matched cap height
+      // "AIRWAYS" positioned inline with generous optical word space and matched cap height
       ctx.save();
-      ctx.translate(228, 0);
+      ctx.translate(234, 0);
       ctx.scale(airwaysScale, airwaysScale);
       ctx.translate(-48.2, -65.35);
+      ctx.lineWidth = 1.45 / airwaysScale;
       ctx.fill(airwaysPath);
+      ctx.stroke(airwaysPath);
       ctx.restore();
     };
 
-    // Port side (+X): nose (+Z, py = h * 0.22) is on viewer's LEFT; tail (-Z, py = h * 0.62) is on viewer's RIGHT
+    // Port side (+X): nose (+Z, py = h * 0.18) is on viewer's LEFT; tail (-Z, py = h * 0.72) is on viewer's RIGHT
     ctx.save();
-    ctx.translate(w * 0.368, h * 0.22);
+    ctx.translate(w * 0.318, h * 0.18);
     ctx.rotate(Math.PI / 2);
     ctx.scale(sLong, sCirc);
     drawSingleLineBrandTitle();
     ctx.restore();
 
-    // Starboard side (-X): tail (-Z, py = h * 0.62) is on viewer's LEFT; nose (+Z, py = h * 0.22) is on viewer's RIGHT
+    // Starboard side (-X): tail (-Z, py = h * 0.72) is on viewer's LEFT; nose (+Z, py = h * 0.18) is on viewer's RIGHT
     ctx.save();
-    ctx.translate(w * 0.632, h * 0.62);
+    ctx.translate(w * 0.682, h * 0.72);
     ctx.rotate(-Math.PI / 2);
     ctx.scale(sLong, sCirc);
     drawSingleLineBrandTitle();
@@ -226,7 +212,7 @@ export class Airplane {
 
     const tex = new THREE.CanvasTexture(canvas);
     tex.colorSpace = THREE.SRGBColorSpace;
-    tex.anisotropy = 8;
+    tex.anisotropy = 16;
     tex.needsUpdate = true;
     return tex;
   }
